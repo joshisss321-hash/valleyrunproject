@@ -11,15 +11,16 @@ const transporter = nodemailer.createTransport({
 const sendEmail = async ({ to, subject, html }) => {
   try {
     await transporter.sendMail({
-      from: `Valley Run <${process.env.EMAIL_USER}>`,
+      from: `"${process.env.EMAIL_FROM_NAME}" <${process.env.EMAIL_USER}>`,
       to,
+      replyTo: process.env.EMAIL_REPLY_TO,
       subject,
       html,
     });
 
     console.log("✅ Email sent to:", to);
-  } catch (error) {
-    console.error("❌ Email error:", error.message);
+  } catch (err) {
+    console.error("❌ Email error:", err.message);
   }
 };
 
