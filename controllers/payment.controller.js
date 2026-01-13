@@ -3,7 +3,6 @@ const crypto = require("crypto");
 const Registration = require("../models/Registration");
 const Event = require("../models/Event");
 const User = require("../models/User");
-const sendEmail = require("../utils/sendEmail"); // ✅ ADD THIS
 
 const razorpay = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID,
@@ -25,7 +24,7 @@ const createOrder = async (req, res) => {
     }
 
     const order = await razorpay.orders.create({
-      amount: amount * 100, // ₹ → paise
+      amount: amount * 100, // paise
       currency: "INR",
       receipt: `receipt_${Date.now()}`,
     });
@@ -45,7 +44,7 @@ const createOrder = async (req, res) => {
 };
 
 /* ===============================
-   VERIFY PAYMENT + EMAIL
+   VERIFY PAYMENT
 ================================ */
 const verifyPayment = async (req, res) => {
   try {
@@ -67,7 +66,7 @@ const verifyPayment = async (req, res) => {
       source,
     } = req.body;
 
-    /* 🔐 Verify Razorpay signature */
+    // 🔐 Verify Razorpay signature
     const body = razorpay_order_id + "|" + razorpay_payment_id;
     const expectedSignature = crypto
       .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
@@ -81,7 +80,7 @@ const verifyPayment = async (req, res) => {
       });
     }
 
-    /* ✅ Find event */
+    // ✅ Find event
     const event = await Event.findOne({ slug: eventSlug });
     if (!event) {
       return res.status(404).json({
@@ -90,7 +89,7 @@ const verifyPayment = async (req, res) => {
       });
     }
 
-    /* ✅ Create / Update User */
+    // ✅ Create / update user
     let user = await User.findOne({ email });
 
     if (!user) {
@@ -108,7 +107,7 @@ const verifyPayment = async (req, res) => {
       });
     }
 
-    /* ✅ Save Registration */
+    // ✅ Registration
     await Registration.create({
       user: user._id,
       event: event._id,
@@ -118,45 +117,9 @@ const verifyPayment = async (req, res) => {
       status: "paid",
     });
 
-    /* ===============================
-       📧 SEND SUCCESS EMAIL
-    ================================ */
-    await sendEmail({
-      to: email,
-      subject: "🎉 Valley Run – Registration Successful!",
-      html: `
-        <h2>Hi ${name},</h2>
-
-        <p>Congratulations! 🎉</p>
-
-        <p>Your registration for <strong>${event.title}</strong> is confirmed.</p>
-
-        <h3>📌 What’s Next?</h3>
-        <ul>
-          <li>Complete your challenge within the given dates</li>
-          <li>Track your activity using Strava / Garmin / Google Fit</li>
-          <li>Send your screenshot after completion</li>
-        </ul>
-
-        <p>
-          📧 Email: <strong>valleyrun.official@gmail.com</strong><br/>
-          📱 WhatsApp: <strong>+91 70601 48183</strong>
-        </p>
-
-        <p>
-          Thank you for giving us your valuable time 💙<br/>
-          Stay disciplined & keep moving!
-        </p>
-
-        <br/>
-        <strong>— Team Valley Run</strong>
-      `,
-    });
-
-    /* ✅ Final response */
     res.json({
       success: true,
-      message: "Payment verified, registration saved & email sent",
+      message: "Payment verified & registration successful",
     });
   } catch (error) {
     console.error("Verify payment error:", error);
