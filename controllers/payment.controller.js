@@ -3,7 +3,6 @@ const crypto = require("crypto");
 const Registration = require("../models/Registration");
 const Event = require("../models/Event");
 const User = require("../models/User");
-const Leaderboard = require("../models/Leaderboard");
 const sendEmail = require("../utils/sendEmail");
 
 const razorpay = new Razorpay({
@@ -11,39 +10,6 @@ const razorpay = new Razorpay({
   key_secret: process.env.RAZORPAY_KEY_SECRET,
 });
 
-/* ===============================
-   CREATE ORDER
-================================ */
-const createOrder = async (req, res) => {
-  try {
-    const { amount } = req.body;
-
-    if (!amount) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Amount missing" });
-    }
-
-    const order = await razorpay.orders.create({
-      amount: amount * 100,
-      currency: "INR",
-      receipt: "receipt_" + Date.now(),
-    });
-
-    res.json({
-      success: true,
-      order,
-      key: process.env.RAZORPAY_KEY_ID,
-    });
-  } catch (error) {
-    console.error("Create order error:", error);
-    res.status(500).json({ success: false });
-  }
-};
-
-/* ===============================
-   VERIFY PAYMENT + SAVE DATA
-================================ */
 const verifyPayment = async (req, res) => {
   try {
     const {
@@ -51,7 +17,6 @@ const verifyPayment = async (req, res) => {
       razorpay_payment_id,
       razorpay_signature,
 
-      // form data
       eventSlug,
       category,
       name,
@@ -66,7 +31,7 @@ const verifyPayment = async (req, res) => {
       source,
     } = req.body;
 
-    /* 🔐 VERIFY SIGNATURE */
+    /* 🔐 Signature verification */
     const body = razorpay_order_id + "|" + razorpay_payment_id;
 
     const expectedSignature = crypto
@@ -75,12 +40,13 @@ const verifyPayment = async (req, res) => {
       .digest("hex");
 
     if (expectedSignature !== razorpay_signature) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Invalid payment signature" });
+      return res.status(400).json({
+        success: false,
+        message: "Invalid payment signature",
+      });
     }
 
-    /* ✅ FIND EVENT */
+    /* ✅ Event check */
     const event = await Event.findOne({ slug: eventSlug });
     if (!event) {
       return res
@@ -88,7 +54,7 @@ const verifyPayment = async (req, res) => {
         .json({ success: false, message: "Event not found" });
     }
 
-    /* 👤 CREATE / UPDATE USER */
+    /* 👤 Create / Update user */
     let user = await User.findOne({ email });
 
     if (!user) {
@@ -117,50 +83,30 @@ const verifyPayment = async (req, res) => {
       await user.save();
     }
 
-    /* 🧾 REGISTRATION */
+    /* 🧾 Registration create */
     await Registration.create({
       user: user._id,
       event: event._id,
       category,
       paymentId: razorpay_payment_id,
       orderId: razorpay_order_id,
-      amount: event.price || 349,
+      amount: event.price,
       status: "paid",
     });
 
-    /* 🏆 LEADERBOARD ENTRY (FIXED) */
-    if (user.name && category) {
-      await Leaderboard.create({
-        event: event._id,
-        name: user.name,
-        distance: category,
-        time: "Pending",
-      });
-    }
-
-    /* 📧 EMAIL */
+    /* 📧 Confirmation email */
     await sendEmail({
       to: email,
       subject: "🎉 Valley Run – Registration Successful!",
       html: `
         <h2>Hi ${name},</h2>
         <p>Your registration for <strong>${event.title}</strong> is confirmed.</p>
-
-        <p><strong>Next Steps:</strong></p>
-        <ul>
-          <li>Complete your challenge within the event dates</li>
-          <li>Send activity screenshot after completion</li>
-        </ul>
-
+        <p>Please complete the challenge and send your activity proof via:</p>
         <p>
-          📧 Email: valleyrun.official@gmail.com<br/>
-          📱 WhatsApp: +91 70601 48183
+          📧 valleyrun.official@gmail.com <br/>
+          📱 +91 70601 48183
         </p>
-
-        <p>
-          Thank you for giving us your valuable time.<br/>
-          <strong>Team Valley Run</strong>
-        </p>
+        <p>Thank you for choosing Valley Run 🏃‍♂️</p>
       `,
     });
 
@@ -172,12 +118,9 @@ const verifyPayment = async (req, res) => {
     console.error("Verify payment error:", error);
     res.status(500).json({
       success: false,
-      message: "Server error",
+      message: "Payment verification failed",
     });
   }
 };
 
-module.exports = {
-  createOrder,
-  verifyPayment,
-};
+module.exports = { verifyPayment };
