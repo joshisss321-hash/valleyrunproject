@@ -6,7 +6,7 @@ const router = express.Router();
 const {
   createOrder,
   verifyPayment,
-} = require("../controllers/paymentController");
+} = require("../controllers/payment.controller");
 
 // ===============================
 // PAYMENT ROUTES
