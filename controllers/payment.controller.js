@@ -85,4 +85,4 @@ const verifyPayment = async (req, res) => {
     });
   }
 };
-module.exports = { verifyPayment };
+module.exports = { createOrder,verifyPayment };
