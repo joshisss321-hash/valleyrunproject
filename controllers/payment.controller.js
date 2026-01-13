@@ -1,3 +1,51 @@
+const Razorpay = require("razorpay");
+const crypto = require("crypto");
+const Registration = require("../models/Registration");
+const Event = require("../models/Event");
+const User = require("../models/User");
+
+const razorpay = new Razorpay({
+  key_id: process.env.RAZORPAY_KEY_ID,
+  key_secret: process.env.RAZORPAY_KEY_SECRET,
+});
+
+/* ===============================
+   CREATE ORDER
+================================ */
+const createOrder = async (req, res) => {
+  try {
+    const { amount } = req.body;
+
+    if (!amount) {
+      return res.status(400).json({
+        success: false,
+        message: "Amount missing",
+      });
+    }
+
+    const order = await razorpay.orders.create({
+      amount: amount * 349, // paise
+      currency: "INR",
+      receipt: `receipt_${Date.now()}`,
+    });
+
+    res.json({
+      success: true,
+      order,
+      key: process.env.RAZORPAY_KEY_ID,
+    });
+  } catch (error) {
+    console.error("Create order error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Order creation failed",
+    });
+  }
+};
+
+/* ===============================
+   VERIFY PAYMENT
+================================ */
 const verifyPayment = async (req, res) => {
   try {
     const {
@@ -18,10 +66,9 @@ const verifyPayment = async (req, res) => {
       source,
     } = req.body;
 
-    // 🔐 Signature verification
+    // 🔐 Verify Razorpay signature
     const body = razorpay_order_id + "|" + razorpay_payment_id;
-
-    const expectedSignature = require("crypto")
+    const expectedSignature = crypto
       .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
       .update(body)
       .digest("hex");
@@ -29,12 +76,12 @@ const verifyPayment = async (req, res) => {
     if (expectedSignature !== razorpay_signature) {
       return res.status(400).json({
         success: false,
-        message: "Invalid signature",
+        message: "Invalid payment signature",
       });
     }
 
-    // 🔎 Event
-    const event = await require("../models/Event").findOne({ slug: eventSlug });
+    // ✅ Find event
+    const event = await Event.findOne({ slug: eventSlug });
     if (!event) {
       return res.status(404).json({
         success: false,
@@ -42,8 +89,7 @@ const verifyPayment = async (req, res) => {
       });
     }
 
-    // 👤 User
-    const User = require("../models/User");
+    // ✅ Create / update user
     let user = await User.findOne({ email });
 
     if (!user) {
@@ -61,8 +107,7 @@ const verifyPayment = async (req, res) => {
       });
     }
 
-    // 🧾 Registration
-    const Registration = require("../models/Registration");
+    // ✅ Registration
     await Registration.create({
       user: user._id,
       event: event._id,
@@ -72,17 +117,20 @@ const verifyPayment = async (req, res) => {
       status: "paid",
     });
 
-    // ✅ VERY IMPORTANT — FINAL RESPONSE
-    return res.json({
+    res.json({
       success: true,
+      message: "Payment verified & registration successful",
     });
-
   } catch (error) {
     console.error("Verify payment error:", error);
-    return res.status(500).json({
+    res.status(500).json({
       success: false,
-      message: "Verification failed",
+      message: "Server error",
     });
   }
 };
-module.exports = { createOrder,verifyPayment };
+
+module.exports = {
+  createOrder,
+  verifyPayment,
+};

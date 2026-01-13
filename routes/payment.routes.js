@@ -1,5 +1,5 @@
 const express = require("express");
-const router = express.Router();
+
 
 // ⚠️ IMPORTANT:
 // Controller file name & path MUST exactly match (Linux case-sensitive)
@@ -11,7 +11,7 @@ const {
 // ===============================
 // PAYMENT ROUTES
 // ===============================
-
+const router = express.Router();
 // Create Razorpay Order
 router.post("/create-order", createOrder);
 
