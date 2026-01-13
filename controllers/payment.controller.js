@@ -117,6 +117,16 @@ const verifyPayment = async (req, res) => {
       status: "paid",
     });
 
+
+
+
+
+
+
+
+
+
+    
     res.json({
       success: true,
       message: "Payment verified & registration successful",
