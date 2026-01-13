@@ -85,3 +85,4 @@ const verifyPayment = async (req, res) => {
     });
   }
 };
+module.exports = { verifyPayment };
