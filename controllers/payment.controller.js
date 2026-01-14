@@ -131,7 +131,6 @@ const verifyPayment = async (req, res) => {
           <p><b>Payment ID:</b> ${razorpay_payment_id}</p>
           <br/>
           <p>See you at the finish line 🏁</p>
-          <p>Thank you for giving us your valuable time.</p>
           <p><b>Team Valley Run</b></p>
         `,
       });

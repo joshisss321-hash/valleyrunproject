@@ -13,14 +13,14 @@ const sendEmail = async ({ to, subject, html }) => {
     await transporter.sendMail({
       from: `"${process.env.EMAIL_FROM_NAME}" <${process.env.EMAIL_USER}>`,
       to,
-      replyTo: process.env.EMAIL_REPLY_TO,
+      replyTo: process.env.EMAIL_REPLY_TO || process.env.EMAIL_USER,
       subject,
       html,
     });
 
     console.log("✅ Email sent to:", to);
   } catch (err) {
-    console.error("❌ Email error:", err.message);
+    console.error("❌ Email error:", err);
   }
 };
 
