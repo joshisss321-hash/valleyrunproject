@@ -14,7 +14,7 @@ router.get("/:slug", async (req, res) => {
 
     res.json({
       success: true,
-      rows, // 👈 यही frontend expect करता है
+      rows, // 👈
     });
   } catch (err) {
     console.error("Leaderboard fetch error:", err);

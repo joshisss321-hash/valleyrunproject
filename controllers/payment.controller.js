@@ -67,7 +67,7 @@ const verifyPayment = async (req, res) => {
       source,
     } = req.body;
 
-    /* 🔐 VERIFY SIGNATURE */
+    // 1️⃣ Verify signature
     const body = razorpay_order_id + "|" + razorpay_payment_id;
     const expectedSignature = crypto
       .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
@@ -75,24 +75,17 @@ const verifyPayment = async (req, res) => {
       .digest("hex");
 
     if (expectedSignature !== razorpay_signature) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid payment signature",
-      });
+      return res.status(400).json({ success: false });
     }
 
-    /* ✅ EVENT */
+    // 2️⃣ Find event
     const event = await Event.findOne({ slug: eventSlug });
     if (!event) {
-      return res.status(404).json({
-        success: false,
-        message: "Event not found",
-      });
+      return res.status(404).json({ success: false });
     }
 
-    /* ✅ USER */
+    // 3️⃣ User
     let user = await User.findOne({ email });
-
     if (!user) {
       user = await User.create({
         name,
@@ -108,7 +101,7 @@ const verifyPayment = async (req, res) => {
       });
     }
 
-    /* ✅ REGISTRATION */
+    // 4️⃣ Registration
     await Registration.create({
       user: user._id,
       event: event._id,
@@ -118,39 +111,35 @@ const verifyPayment = async (req, res) => {
       status: "paid",
     });
 
-    /* ✅ SEND EMAIL (NON-BLOCKING SAFE) */
-    try {
-      await sendEmail({
-        to: email,
-        subject: "Valley Run – Registration Successful 🏃‍♂️",
-        html: `
-          <h2>Registration Successful 🎉</h2>
-          <p>Hi <b>${name}</b>,</p>
-          <p>You have successfully registered for <b>${event.title}</b>.</p>
-          <p><b>Category:</b> ${category}</p>
-          <p><b>Payment ID:</b> ${razorpay_payment_id}</p>
-          <br/>
-          <p>See you at the finish line 🏁</p>
-          <p><b>Team Valley Run</b></p>
-        `,
-      });
-    } catch (mailError) {
-      console.error("Email sending failed:", mailError.message);
-      // ❗ Payment should NOT fail if email fails
-    }
+    // 5️⃣ ✅ SEND EMAIL (IMPORTANT: BEFORE res.json)
+    console.log("📧 Sending email to:", email);
 
-    /* ✅ FINAL RESPONSE */
+    await sendEmail({
+      to: email,
+      subject: "Valley Run – Registration Successful 🏃‍♂️",
+      html: `
+        <h2>Registration Successful 🎉</h2>
+        <p>Hi <b>${name}</b>,</p>
+        <p>You are registered for <b>${event.title}</b></p>
+        <p><b>Category:</b> ${category}</p>
+        <p><b>Payment ID:</b> ${razorpay_payment_id}</p>
+        <br/>
+        <p>See you at the finish line 🏁</p>
+        <b>Team Valley Run</b>
+      `,
+    });
+
+    console.log("✅ Email sent successfully");
+
+    // 6️⃣ NOW respond to frontend
     res.json({
       success: true,
-      message: "Payment verified & registration successful",
+      message: "Payment verified, email sent",
     });
 
   } catch (error) {
     console.error("Verify payment error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Server error",
-    });
+    res.status(500).json({ success: false });
   }
 };
 
