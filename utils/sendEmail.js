@@ -3,26 +3,30 @@ const nodemailer = require("nodemailer");
 const transporter = nodemailer.createTransport({
   host: process.env.EMAIL_HOST,
   port: Number(process.env.EMAIL_PORT),
-  secure: false, // true only for 465
+  secure: false,
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
   },
+  connectionTimeout: 15000,
+  greetingTimeout: 15000,
+  socketTimeout: 15000,
 });
 
 const sendEmail = async ({ to, subject, html }) => {
   try {
+    console.log("📧 Sending email to:", to);
+
     await transporter.sendMail({
-      from: `"${process.env.EMAIL_FROM_NAME}" <no-reply@valleyrun.com>`,
+      from: `"Valley Run" <no-reply@valleyrun.com>`,
       to,
-      replyTo: process.env.EMAIL_REPLY_TO,
       subject,
       html,
     });
 
-    console.log("✅ Email sent to:", to);
+    console.log("✅ Email sent successfully");
   } catch (err) {
-    console.error("❌ Email error:", err);
+    console.error("❌ Email error:", err.message);
   }
 };
 
