@@ -3,6 +3,7 @@ const crypto = require("crypto");
 const Registration = require("../models/Registration");
 const Event = require("../models/Event");
 const User = require("../models/User");
+const sendEmail = require("../utils/sendEmail");
 
 const razorpay = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID,
@@ -66,7 +67,7 @@ const verifyPayment = async (req, res) => {
       source,
     } = req.body;
 
-    // 🔐 Verify Razorpay signature
+    /* 🔐 VERIFY SIGNATURE */
     const body = razorpay_order_id + "|" + razorpay_payment_id;
     const expectedSignature = crypto
       .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
@@ -80,7 +81,7 @@ const verifyPayment = async (req, res) => {
       });
     }
 
-    // ✅ Find event
+    /* ✅ EVENT */
     const event = await Event.findOne({ slug: eventSlug });
     if (!event) {
       return res.status(404).json({
@@ -89,7 +90,7 @@ const verifyPayment = async (req, res) => {
       });
     }
 
-    // ✅ Create / update user
+    /* ✅ USER */
     let user = await User.findOne({ email });
 
     if (!user) {
@@ -107,7 +108,7 @@ const verifyPayment = async (req, res) => {
       });
     }
 
-    // ✅ Registration
+    /* ✅ REGISTRATION */
     await Registration.create({
       user: user._id,
       event: event._id,
@@ -117,20 +118,34 @@ const verifyPayment = async (req, res) => {
       status: "paid",
     });
 
+    /* ✅ SEND EMAIL (NON-BLOCKING SAFE) */
+    try {
+      await sendEmail({
+        to: email,
+        subject: "Valley Run – Registration Successful 🏃‍♂️",
+        html: `
+          <h2>Registration Successful 🎉</h2>
+          <p>Hi <b>${name}</b>,</p>
+          <p>You have successfully registered for <b>${event.title}</b>.</p>
+          <p><b>Category:</b> ${category}</p>
+          <p><b>Payment ID:</b> ${razorpay_payment_id}</p>
+          <br/>
+          <p>See you at the finish line 🏁</p>
+          <p>Thank you for giving us your valuable time.</p>
+          <p><b>Team Valley Run</b></p>
+        `,
+      });
+    } catch (mailError) {
+      console.error("Email sending failed:", mailError.message);
+      // ❗ Payment should NOT fail if email fails
+    }
 
-
-
-
-
-
-
-
-
-    
+    /* ✅ FINAL RESPONSE */
     res.json({
       success: true,
       message: "Payment verified & registration successful",
     });
+
   } catch (error) {
     console.error("Verify payment error:", error);
     res.status(500).json({
