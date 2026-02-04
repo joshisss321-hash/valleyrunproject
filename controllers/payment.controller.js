@@ -244,13 +244,13 @@ const createOrder = async (req, res) => {
       key: process.env.RAZORPAY_KEY_ID,
     });
   } catch (err) {
-    console.error("CREATE ORDER ERROR:", err);
+    console.error(err);
     res.status(500).json({ success: false });
   }
 };
 
 /* ===============================
-   VERIFY PAYMENT (ISSUE FIXED)
+   VERIFY PAYMENT (FINAL STABLE)
 ================================ */
 const verifyPayment = async (req, res) => {
   try {
@@ -265,50 +265,53 @@ const verifyPayment = async (req, res) => {
       phone,
     } = req.body;
 
-    /* 🔐 1. Razorpay Signature Verification */
+    /* 1️⃣ Razorpay signature verify */
     const body = razorpay_order_id + "|" + razorpay_payment_id;
-    const expectedSignature = crypto
+    const expected = crypto
       .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
       .update(body)
       .digest("hex");
 
-    if (expectedSignature !== razorpay_signature) {
+    if (expected !== razorpay_signature) {
       return res.status(400).json({ success: false });
     }
 
-    /* 🔎 2. FIX: Decode & match slug OR title */
-    const decodedValue = decodeURIComponent(eventSlug || "");
+    /* 2️⃣ Decode slug safely */
+    const decoded = decodeURIComponent(eventSlug || "");
 
     const event = await Event.findOne({
-      $or: [
-        { slug: decodedValue },
-        { title: decodedValue }
-      ]
+      $or: [{ slug: decoded }, { title: decoded }],
     });
 
     if (!event) {
-      console.warn("⚠️ Event not found for payment:", decodedValue);
+      return res.json({ success: true }); // payment ok, event optional
     }
 
-    /* 👤 3. User create / update */
+    /* 3️⃣ IMPORTANT: DO NOT overwrite user data */
     let user = await User.findOne({ email });
+
     if (!user) {
+      // user already created by form earlier
       user = await User.create({ name, email, phone });
     }
 
-    /* 📝 4. Registration save (only if event exists) */
-    if (event) {
-      await Registration.create({
-        user: user._id,
-        event: event._id,
-        category,
-        paymentId: razorpay_payment_id,
-        orderId: razorpay_order_id,
-        status: "paid",
-      });
-    }
+    /* 4️⃣ Save registration */
+    await Registration.create({
+      user: user._id,
+      event: event._id,
+      category,
+      paymentId: razorpay_payment_id,
+      orderId: razorpay_order_id,
+      status: "paid",
+    });
 
-    /* 📧 5. Confirmation Email */
+    /* 5️⃣ Update joinedEvents WITHOUT deleting old data */
+    await User.updateOne(
+      { _id: user._id },
+      { $addToSet: { joinedEvents: event._id } }
+    );
+
+    /* 6️⃣ Send confirmation email */
     try {
       await sendEmail({
         to: email,
@@ -316,26 +319,22 @@ const verifyPayment = async (req, res) => {
         html: `
           <h2>Registration Successful 🎉</h2>
           <p>Hi <b>${name}</b>,</p>
-          <p>
-            You are registered for 
-            <b>${event?.title || "Valley Run Event"}</b>
-          </p>
+          <p>You are registered for <b>${event.title}</b></p>
           <p>Category: ${category}</p>
           <p>Payment ID: ${razorpay_payment_id}</p>
           <br/>
           <p>🏁 Team Valley Run</p>
         `,
       });
-      console.log("✅ EMAIL SENT TO:", email);
-    } catch (mailErr) {
-      console.error("❌ EMAIL FAILED:", mailErr);
+    } catch (e) {
+      console.error("Email error:", e);
     }
 
-    /* ✅ 6. FINAL RESPONSE */
+    /* 7️⃣ FINAL RESPONSE (frontend waits for this) */
     res.json({ success: true });
 
   } catch (err) {
-    console.error("VERIFY PAYMENT ERROR:", err);
+    console.error("VERIFY ERROR:", err);
     res.status(500).json({ success: false });
   }
 };
