@@ -102,6 +102,117 @@
 // };
 
 // module.exports = { createOrder, verifyPayment };
+// const Razorpay = require("razorpay");
+// const crypto = require("crypto");
+// const Registration = require("../models/Registration");
+// const Event = require("../models/Event");
+// const User = require("../models/User");
+// const sendEmail = require("../utils/sendEmail");
+
+// const razorpay = new Razorpay({
+//   key_id: process.env.RAZORPAY_KEY_ID,
+//   key_secret: process.env.RAZORPAY_KEY_SECRET,
+// });
+
+// /* ===============================
+//    CREATE ORDER
+// ================================ */
+// const createOrder = async (req, res) => {
+//   try {
+//     const { amount } = req.body;
+
+//     const order = await razorpay.orders.create({
+//       amount: amount * 100,
+//       currency: "INR",
+//       receipt: `receipt_${Date.now()}`,
+//     });
+
+//     res.json({
+//       success: true,
+//       order,
+//       key: process.env.RAZORPAY_KEY_ID,
+//     });
+//   } catch (err) {
+//     console.error("CREATE ORDER ERROR:", err);
+//     res.status(500).json({ success: false });
+//   }
+// };
+
+// /* ===============================
+//    VERIFY PAYMENT  (FIXED & SAFE)
+// ================================ */
+// const verifyPayment = async (req, res) => {
+//   try {
+//     const {
+//       razorpay_order_id,
+//       razorpay_payment_id,
+//       razorpay_signature,
+//       eventSlug,
+//       category,
+//       name,
+//       email,
+//       phone,
+//     } = req.body;
+
+//     // 🔐 1. Signature verification (ONLY source of truth)
+//     const body = razorpay_order_id + "|" + razorpay_payment_id;
+//     const expectedSignature = crypto
+//       .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+//       .update(body)
+//       .digest("hex");
+
+//     if (expectedSignature !== razorpay_signature) {
+//       return res.status(400).json({ success: false });
+//     }
+
+//     // ✅ 2. IMMEDIATE SUCCESS RESPONSE (IMPORTANT)
+//     res.json({ success: true });
+
+//     // ===============================
+//     // ⬇️ Everything below is NON-BLOCKING
+//     // ===============================
+
+//     const event = await Event.findOne({ slug: eventSlug });
+//     if (!event) {
+//       console.warn("⚠️ Event not found for payment:", eventSlug);
+//       return;
+//     }
+
+//     let user = await User.findOne({ email });
+//     if (!user) {
+//       user = await User.create({ name, email, phone });
+//     }
+
+//     await Registration.create({
+//       user: user._id,
+//       event: event._id,
+//       category,
+//       paymentId: razorpay_payment_id,
+//       orderId: razorpay_order_id,
+//       status: "paid",
+//     });
+
+//     // 📧 Background confirmation email
+//     sendEmail({
+//       to: email,
+//       subject: "Valley Run – Registration Confirmed 🏃‍♂️",
+//       html: `
+//         <h2>Registration Successful 🎉</h2>
+//         <p>Hi <b>${name}</b>,</p>
+//         <p>You are registered for <b>${event.title}</b></p>
+//         <p>Category: ${category}</p>
+//         <p>Payment ID: ${razorpay_payment_id}</p>
+//         <br/>
+//         <p>🏁 Team Valley Run</p>
+//       `,
+//     });
+
+//   } catch (err) {
+//     console.error("VERIFY PAYMENT ERROR:", err);
+//   }
+// };
+
+// module.exports = { createOrder, verifyPayment };
 const Razorpay = require("razorpay");
 const crypto = require("crypto");
 const Registration = require("../models/Registration");
@@ -139,7 +250,7 @@ const createOrder = async (req, res) => {
 };
 
 /* ===============================
-   VERIFY PAYMENT  (FIXED & SAFE)
+   VERIFY PAYMENT (ISSUE FIXED)
 ================================ */
 const verifyPayment = async (req, res) => {
   try {
@@ -154,7 +265,7 @@ const verifyPayment = async (req, res) => {
       phone,
     } = req.body;
 
-    // 🔐 1. Signature verification (ONLY source of truth)
+    /* 🔐 1. Razorpay Signature Verification */
     const body = razorpay_order_id + "|" + razorpay_payment_id;
     const expectedSignature = crypto
       .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
@@ -165,50 +276,67 @@ const verifyPayment = async (req, res) => {
       return res.status(400).json({ success: false });
     }
 
-    // ✅ 2. IMMEDIATE SUCCESS RESPONSE (IMPORTANT)
-    res.json({ success: true });
+    /* 🔎 2. FIX: Decode & match slug OR title */
+    const decodedValue = decodeURIComponent(eventSlug || "");
 
-    // ===============================
-    // ⬇️ Everything below is NON-BLOCKING
-    // ===============================
+    const event = await Event.findOne({
+      $or: [
+        { slug: decodedValue },
+        { title: decodedValue }
+      ]
+    });
 
-    const event = await Event.findOne({ slug: eventSlug });
     if (!event) {
-      console.warn("⚠️ Event not found for payment:", eventSlug);
-      return;
+      console.warn("⚠️ Event not found for payment:", decodedValue);
     }
 
+    /* 👤 3. User create / update */
     let user = await User.findOne({ email });
     if (!user) {
       user = await User.create({ name, email, phone });
     }
 
-    await Registration.create({
-      user: user._id,
-      event: event._id,
-      category,
-      paymentId: razorpay_payment_id,
-      orderId: razorpay_order_id,
-      status: "paid",
-    });
+    /* 📝 4. Registration save (only if event exists) */
+    if (event) {
+      await Registration.create({
+        user: user._id,
+        event: event._id,
+        category,
+        paymentId: razorpay_payment_id,
+        orderId: razorpay_order_id,
+        status: "paid",
+      });
+    }
 
-    // 📧 Background confirmation email
-    sendEmail({
-      to: email,
-      subject: "Valley Run – Registration Confirmed 🏃‍♂️",
-      html: `
-        <h2>Registration Successful 🎉</h2>
-        <p>Hi <b>${name}</b>,</p>
-        <p>You are registered for <b>${event.title}</b></p>
-        <p>Category: ${category}</p>
-        <p>Payment ID: ${razorpay_payment_id}</p>
-        <br/>
-        <p>🏁 Team Valley Run</p>
-      `,
-    });
+    /* 📧 5. Confirmation Email */
+    try {
+      await sendEmail({
+        to: email,
+        subject: "Valley Run – Registration Confirmed 🏃‍♂️",
+        html: `
+          <h2>Registration Successful 🎉</h2>
+          <p>Hi <b>${name}</b>,</p>
+          <p>
+            You are registered for 
+            <b>${event?.title || "Valley Run Event"}</b>
+          </p>
+          <p>Category: ${category}</p>
+          <p>Payment ID: ${razorpay_payment_id}</p>
+          <br/>
+          <p>🏁 Team Valley Run</p>
+        `,
+      });
+      console.log("✅ EMAIL SENT TO:", email);
+    } catch (mailErr) {
+      console.error("❌ EMAIL FAILED:", mailErr);
+    }
+
+    /* ✅ 6. FINAL RESPONSE */
+    res.json({ success: true });
 
   } catch (err) {
     console.error("VERIFY PAYMENT ERROR:", err);
+    res.status(500).json({ success: false });
   }
 };
 
