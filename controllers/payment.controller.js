@@ -218,23 +218,26 @@ const crypto = require("crypto");
 const Registration = require("../models/Registration");
 const Event = require("../models/Event");
 const User = require("../models/User");
+const sendEmail = require("../utils/sendEmail");
 
 const razorpay = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID,
   key_secret: process.env.RAZORPAY_KEY_SECRET,
 });
 
-/* ================= CREATE ORDER ================= */
-exports.createOrder = async (req, res) => {
+/* ===============================
+   CREATE ORDER
+================================ */
+const createOrder = async (req, res) => {
   try {
     const { amount } = req.body;
 
     if (!amount) {
-      return res.status(400).json({ success: false });
+      return res.status(400).json({ success: false, message: "Amount missing" });
     }
 
     const order = await razorpay.orders.create({
-      amount: Number(amount) * 100, // paise
+      amount: amount * 100, // rupees → paise
       currency: "INR",
       receipt: `receipt_${Date.now()}`,
     });
@@ -242,6 +245,7 @@ exports.createOrder = async (req, res) => {
     res.json({
       success: true,
       order,
+      key: process.env.RAZORPAY_KEY_ID,
     });
   } catch (err) {
     console.error("Create order error:", err);
@@ -249,35 +253,35 @@ exports.createOrder = async (req, res) => {
   }
 };
 
-/* ================= VERIFY PAYMENT ================= */
-exports.verifyPayment = async (req, res) => {
+/* ===============================
+   VERIFY PAYMENT
+================================ */
+const verifyPayment = async (req, res) => {
   try {
     const {
       razorpay_order_id,
       razorpay_payment_id,
       razorpay_signature,
       eventSlug,
+      category,
       name,
       email,
       phone,
-      category,
     } = req.body;
 
-    // 🔐 signature verify
-    const body = `${razorpay_order_id}|${razorpay_payment_id}`;
-    const expected = crypto
+    // 🔐 Verify signature
+    const body = razorpay_order_id + "|" + razorpay_payment_id;
+    const expectedSignature = crypto
       .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
       .update(body)
       .digest("hex");
 
-    if (expected !== razorpay_signature) {
+    if (expectedSignature !== razorpay_signature) {
       return res.status(400).json({ success: false });
     }
 
     const event = await Event.findOne({ slug: eventSlug });
-    if (!event) {
-      return res.status(404).json({ success: false });
-    }
+    if (!event) return res.status(404).json({ success: false });
 
     let user = await User.findOne({ email });
     if (!user) {
@@ -293,12 +297,31 @@ exports.verifyPayment = async (req, res) => {
       status: "paid",
     });
 
-    // ✅ RESPONSE FIRST (THIS FIXES REDIRECT)
+    // ✅ FRONTEND RESPONSE FIRST
     res.json({ success: true });
 
+    // 📧 EMAIL (non-blocking)
+    sendEmail({
+      to: email,
+      subject: "Valley Run – Registration Confirmed 🏃‍♂️",
+      html: `
+        <h2>Registration Successful 🎉</h2>
+        <p>Hi <b>${name}</b>,</p>
+        <p>You are registered for <b>${event.title}</b></p>
+        <p><b>Category:</b> ${category}</p>
+        <p><b>Payment ID:</b> ${razorpay_payment_id}</p>
+        <br/>
+        <p>🏁 Team Valley Run</p>
+      `,
+    });
+
   } catch (err) {
-    console.error("Verify error:", err);
+    console.error("Verify payment error:", err);
     res.status(500).json({ success: false });
   }
 };
- module.exports = { createOrder, verifyPayment };
+
+module.exports = {
+  createOrder,
+  verifyPayment,
+};
