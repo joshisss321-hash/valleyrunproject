@@ -11,7 +11,7 @@ const {
 // ===============================
 // PAYMENT ROUTES
 // ===============================
-const router = express.Router();
+// const router = express.Router();
 // Create Razorpay Order
 router.post("/create-order", createOrder);
 
