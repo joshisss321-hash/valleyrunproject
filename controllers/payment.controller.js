@@ -228,9 +228,13 @@ const razorpay = new Razorpay({
 /* ===============================
    CREATE ORDER
 ================================ */
-const createOrder = async (req, res) => {
+exports.createOrder = async (req, res) => {
   try {
     const { amount } = req.body;
+
+    if (!amount) {
+      return res.status(400).json({ success: false });
+    }
 
     const order = await razorpay.orders.create({
       amount: amount * 100,
@@ -238,21 +242,17 @@ const createOrder = async (req, res) => {
       receipt: `receipt_${Date.now()}`,
     });
 
-    res.json({
-      success: true,
-      order,
-      key: process.env.RAZORPAY_KEY_ID,
-    });
+    res.json({ success: true, order });
   } catch (err) {
-    console.error(err);
+    console.error("Order error:", err);
     res.status(500).json({ success: false });
   }
 };
 
 /* ===============================
-   VERIFY PAYMENT (FINAL STABLE)
+   VERIFY PAYMENT
 ================================ */
-const verifyPayment = async (req, res) => {
+exports.verifyPayment = async (req, res) => {
   try {
     const {
       razorpay_order_id,
@@ -265,7 +265,7 @@ const verifyPayment = async (req, res) => {
       phone,
     } = req.body;
 
-    /* 1️⃣ Razorpay signature verify */
+    // 🔐 Signature verify
     const body = razorpay_order_id + "|" + razorpay_payment_id;
     const expected = crypto
       .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
@@ -276,26 +276,22 @@ const verifyPayment = async (req, res) => {
       return res.status(400).json({ success: false });
     }
 
-    /* 2️⃣ Decode slug safely */
-    const decoded = decodeURIComponent(eventSlug || "");
-
-    const event = await Event.findOne({
-      $or: [{ slug: decoded }, { title: decoded }],
-    });
-
+    // 🔎 Event (IMPORTANT FIX)
+    const event = await Event.findOne({ slug: eventSlug });
     if (!event) {
-      return res.json({ success: true }); // payment ok, event optional
+      return res.status(404).json({
+        success: false,
+        message: "Event not found (slug mismatch)",
+      });
     }
 
-    /* 3️⃣ IMPORTANT: DO NOT overwrite user data */
+    // 👤 User
     let user = await User.findOne({ email });
-
     if (!user) {
-      // user already created by form earlier
       user = await User.create({ name, email, phone });
     }
 
-    /* 4️⃣ Save registration */
+    // 📝 Registration
     await Registration.create({
       user: user._id,
       event: event._id,
@@ -305,38 +301,27 @@ const verifyPayment = async (req, res) => {
       status: "paid",
     });
 
-    /* 5️⃣ Update joinedEvents WITHOUT deleting old data */
-    await User.updateOne(
-      { _id: user._id },
-      { $addToSet: { joinedEvents: event._id } }
-    );
-
-    /* 6️⃣ Send confirmation email */
-    try {
-      await sendEmail({
-        to: email,
-        subject: "Valley Run – Registration Confirmed 🏃‍♂️",
-        html: `
-          <h2>Registration Successful 🎉</h2>
-          <p>Hi <b>${name}</b>,</p>
-          <p>You are registered for <b>${event.title}</b></p>
-          <p>Category: ${category}</p>
-          <p>Payment ID: ${razorpay_payment_id}</p>
-          <br/>
-          <p>🏁 Team Valley Run</p>
-        `,
-      });
-    } catch (e) {
-      console.error("Email error:", e);
-    }
-
-    /* 7️⃣ FINAL RESPONSE (frontend waits for this) */
+    // ✅ SEND RESPONSE FIRST (CRITICAL)
     res.json({ success: true });
 
+    // 📧 Email (background)
+    sendEmail({
+      to: email,
+      subject: "Valley Run – Registration Confirmed 🏃‍♂️",
+      html: `
+        <h2>Registration Successful 🎉</h2>
+        <p>Hello <b>${name}</b>,</p>
+        <p>You are registered for <b>${event.title}</b></p>
+        <p><b>Category:</b> ${category}</p>
+        <p><b>Payment ID:</b> ${razorpay_payment_id}</p>
+        <br/>
+        <p>🏁 Team Valley Run</p>
+      `,
+    });
+
   } catch (err) {
-    console.error("VERIFY ERROR:", err);
+    console.error("Verify error:", err);
     res.status(500).json({ success: false });
   }
 };
-
 module.exports = { createOrder, verifyPayment };
