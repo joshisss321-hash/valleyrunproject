@@ -301,3 +301,4 @@ exports.verifyPayment = async (req, res) => {
     res.status(500).json({ success: false });
   }
 };
+ module.exports = { createOrder, verifyPayment };
