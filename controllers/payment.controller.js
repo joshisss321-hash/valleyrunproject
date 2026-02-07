@@ -218,7 +218,6 @@ const crypto = require("crypto");
 const Registration = require("../models/Registration");
 const Event = require("../models/Event");
 const User = require("../models/User");
-const sendEmail = require("../utils/sendEmail");
 
 const razorpay = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID,
@@ -237,7 +236,7 @@ const createOrder = async (req, res) => {
     }
 
     const order = await razorpay.orders.create({
-      amount: amount * 100, // rupees → paise
+      amount: amount * 100, // paise
       currency: "INR",
       receipt: `receipt_${Date.now()}`,
     });
@@ -280,14 +279,19 @@ const verifyPayment = async (req, res) => {
       return res.status(400).json({ success: false });
     }
 
+    // ✅ Event
     const event = await Event.findOne({ slug: eventSlug });
-    if (!event) return res.status(404).json({ success: false });
+    if (!event) {
+      return res.status(404).json({ success: false });
+    }
 
+    // ✅ User
     let user = await User.findOne({ email });
     if (!user) {
       user = await User.create({ name, email, phone });
     }
 
+    // ✅ Registration
     await Registration.create({
       user: user._id,
       event: event._id,
@@ -297,31 +301,13 @@ const verifyPayment = async (req, res) => {
       status: "paid",
     });
 
-    // ✅ FRONTEND RESPONSE FIRST
+    // ✅ IMPORTANT: respond FIRST
     res.json({ success: true });
 
-    // 📧 EMAIL (non-blocking)
-    sendEmail({
-      to: email,
-      subject: "Valley Run – Registration Confirmed 🏃‍♂️",
-      html: `
-        <h2>Registration Successful 🎉</h2>
-        <p>Hi <b>${name}</b>,</p>
-        <p>You are registered for <b>${event.title}</b></p>
-        <p><b>Category:</b> ${category}</p>
-        <p><b>Payment ID:</b> ${razorpay_payment_id}</p>
-        <br/>
-        <p>🏁 Team Valley Run</p>
-      `,
-    });
-
   } catch (err) {
-    console.error("Verify payment error:", err);
+    console.error("Verify error:", err);
     res.status(500).json({ success: false });
   }
 };
 
-module.exports = {
-  createOrder,
-  verifyPayment,
-};
+module.exports = { createOrder, verifyPayment };

@@ -1,19 +1,15 @@
 const express = require("express");
-const router = express.Router(); // ✅ THIS WAS MISSING
+const router = express.Router();
 
 const {
   createOrder,
   verifyPayment,
 } = require("../controllers/payment.controller");
 
-// ===============================
-// PAYMENT ROUTES
-// ===============================
-
-// Create Razorpay Order
+// 🔹 Create Razorpay order
 router.post("/create-order", createOrder);
 
-// Verify Payment
+// 🔹 Verify payment (THIS WAS MISSING / WRONG)
 router.post("/verify-payment", verifyPayment);
 
 module.exports = router;
