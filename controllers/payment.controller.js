@@ -227,40 +227,42 @@ const razorpay = new Razorpay({
 /* ===============================
    CREATE ORDER
 ================================ */
-const createOrder = async (req, res) => {
+exports.createOrder = async (req, res) => {
   try {
     const { amount } = req.body;
 
     if (!amount) {
-      return res.status(400).json({ success: false, message: "Amount missing" });
+      return res.status(400).json({ success: false });
     }
 
     const order = await razorpay.orders.create({
-      amount: amount * 100, // paise
+      amount: Number(amount) * 100,
       currency: "INR",
       receipt: `receipt_${Date.now()}`,
     });
 
-    res.json({
+    return res.json({
       success: true,
       order,
-      key: process.env.RAZORPAY_KEY_ID,
     });
   } catch (err) {
-    console.error("Create order error:", err);
-    res.status(500).json({ success: false });
+    console.error("Create Order Error:", err);
+    return res.status(500).json({ success: false });
   }
 };
 
 /* ===============================
    VERIFY PAYMENT
 ================================ */
-const verifyPayment = async (req, res) => {
+exports.verifyPayment = async (req, res) => {
   try {
+    console.log("VERIFY API HIT");
+
     const {
       razorpay_order_id,
       razorpay_payment_id,
       razorpay_signature,
+      eventSlug,
       name,
       email,
       phone,
@@ -270,35 +272,36 @@ const verifyPayment = async (req, res) => {
       city,
       state,
       pincode,
-      source,
       category,
+      source,
     } = req.body;
 
-    // 🔐 Signature verify
+    // 🔐 Verify signature
     const body = razorpay_order_id + "|" + razorpay_payment_id;
-    const expected = crypto
+
+    const expectedSignature = crypto
       .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
       .update(body)
       .digest("hex");
 
-    if (expected !== razorpay_signature) {
+    if (expectedSignature !== razorpay_signature) {
+      console.log("❌ Signature mismatch");
       return res.status(400).json({ success: false });
     }
 
-    // 🟢 Fetch order for slug
-    const order = await razorpay.orders.fetch(razorpay_order_id);
-    const eventSlug = order.notes?.eventSlug;
-
     const event = await Event.findOne({ slug: eventSlug });
     if (!event) {
+      console.log("❌ Event not found");
       return res.status(404).json({ success: false });
     }
 
-    // ✅ FULL USER UPSERT (ALL FIELDS)
-    const user = await User.findOneAndUpdate(
-      { email },
-      {
+    // USER SAVE
+    let user = await User.findOne({ email });
+
+    if (!user) {
+      user = await User.create({
         name,
+        email,
         phone,
         address1,
         address2,
@@ -307,15 +310,19 @@ const verifyPayment = async (req, res) => {
         state,
         pincode,
         source,
-      },
-      {
-        new: true,
-        upsert: true,
-        setDefaultsOnInsert: true,
-      }
-    );
+      });
+    } else {
+      user.address1 = address1;
+      user.address2 = address2;
+      user.landmark = landmark;
+      user.city = city;
+      user.state = state;
+      user.pincode = pincode;
+      user.source = source;
+      await user.save();
+    }
 
-    // ✅ SAVE REGISTRATION
+    // REGISTRATION SAVE
     await Registration.create({
       user: user._id,
       event: event._id,
@@ -328,10 +335,9 @@ const verifyPayment = async (req, res) => {
     return res.json({ success: true });
 
   } catch (err) {
-    console.error("VERIFY ERROR:", err);
+    console.error("Verify Error:", err);
     return res.status(500).json({ success: false });
   }
 };
-
 
 module.exports = { createOrder, verifyPayment };
