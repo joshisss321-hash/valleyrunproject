@@ -227,16 +227,19 @@ const razorpay = new Razorpay({
 /* ===============================
    CREATE ORDER
 ================================ */
-exports.createOrder = async (req, res) => {
+const createOrder = async (req, res) => {
   try {
     const { amount } = req.body;
 
     if (!amount) {
-      return res.status(400).json({ success: false });
+      return res.status(400).json({
+        success: false,
+        message: "Amount missing",
+      });
     }
 
     const order = await razorpay.orders.create({
-      amount: Number(amount) * 100,
+      amount: amount * 100, // convert to paise
       currency: "INR",
       receipt: `receipt_${Date.now()}`,
     });
@@ -247,17 +250,18 @@ exports.createOrder = async (req, res) => {
     });
   } catch (err) {
     console.error("Create Order Error:", err);
-    return res.status(500).json({ success: false });
+    return res.status(500).json({
+      success: false,
+      message: "Order creation failed",
+    });
   }
 };
 
 /* ===============================
    VERIFY PAYMENT
 ================================ */
-exports.verifyPayment = async (req, res) => {
+const verifyPayment = async (req, res) => {
   try {
-    console.log("VERIFY API HIT");
-
     const {
       razorpay_order_id,
       razorpay_payment_id,
@@ -276,7 +280,9 @@ exports.verifyPayment = async (req, res) => {
       source,
     } = req.body;
 
-    // 🔐 Verify signature
+    console.log("VERIFY BODY:", req.body);
+
+    // 🔐 Signature verify
     const body = razorpay_order_id + "|" + razorpay_payment_id;
 
     const expectedSignature = crypto
@@ -285,17 +291,22 @@ exports.verifyPayment = async (req, res) => {
       .digest("hex");
 
     if (expectedSignature !== razorpay_signature) {
-      console.log("❌ Signature mismatch");
-      return res.status(400).json({ success: false });
+      return res.status(400).json({
+        success: false,
+        message: "Signature mismatch",
+      });
     }
 
+    // ✅ Find event
     const event = await Event.findOne({ slug: eventSlug });
     if (!event) {
-      console.log("❌ Event not found");
-      return res.status(404).json({ success: false });
+      return res.status(404).json({
+        success: false,
+        message: "Event not found",
+      });
     }
 
-    // USER SAVE
+    // ✅ Create or update user
     let user = await User.findOne({ email });
 
     if (!user) {
@@ -312,6 +323,9 @@ exports.verifyPayment = async (req, res) => {
         source,
       });
     } else {
+      // update full details if already exists
+      user.name = name;
+      user.phone = phone;
       user.address1 = address1;
       user.address2 = address2;
       user.landmark = landmark;
@@ -322,7 +336,7 @@ exports.verifyPayment = async (req, res) => {
       await user.save();
     }
 
-    // REGISTRATION SAVE
+    // ✅ Save registration
     await Registration.create({
       user: user._id,
       event: event._id,
@@ -332,12 +346,21 @@ exports.verifyPayment = async (req, res) => {
       status: "paid",
     });
 
-    return res.json({ success: true });
+    return res.json({
+      success: true,
+      message: "Payment verified successfully",
+    });
 
   } catch (err) {
-    console.error("Verify Error:", err);
-    return res.status(500).json({ success: false });
+    console.error("Verify Payment Error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
   }
 };
 
-module.exports = { createOrder, verifyPayment };
+module.exports = {
+  createOrder,
+  verifyPayment,
+};
