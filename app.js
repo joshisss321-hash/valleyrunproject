@@ -22,6 +22,7 @@ app.use(
       "https://valleyrun.in",
       "https://www.valleyrun.in",
       "https://valleyrun.vercel.app",
+      "https://frontendvalley-run-project-36s2.vercel.app",
     ],
     methods: ["GET", "POST"],
     credentials: true,
