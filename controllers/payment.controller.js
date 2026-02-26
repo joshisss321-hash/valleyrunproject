@@ -280,8 +280,6 @@ const verifyPayment = async (req, res) => {
       source,
     } = req.body;
 
-    console.log("VERIFY BODY:", req.body);
-
     // 🔐 Signature verify
     const body = razorpay_order_id + "|" + razorpay_payment_id;
 
@@ -321,9 +319,9 @@ const verifyPayment = async (req, res) => {
         state,
         pincode,
         source,
+        joinedEvents: [event._id], // 🔥 FIX ADDED HERE
       });
     } else {
-      // update full details if already exists
       user.name = name;
       user.phone = phone;
       user.address1 = address1;
@@ -333,6 +331,13 @@ const verifyPayment = async (req, res) => {
       user.state = state;
       user.pincode = pincode;
       user.source = source;
+
+      // 🔥 IMPORTANT FIX
+      // Avoid duplicate entries
+      if (!user.joinedEvents.includes(event._id)) {
+        user.joinedEvents.push(event._id);
+      }
+
       await user.save();
     }
 
