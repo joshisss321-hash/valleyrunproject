@@ -1,4 +1,4 @@
-// const Razorpay = require("razorpay");
+'// const Razorpay = require("razorpay");
 // const crypto = require("crypto");
 // const Registration = require("../models/Registration");
 // const Event = require("../models/Event");
