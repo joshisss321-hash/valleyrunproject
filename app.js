@@ -9,6 +9,7 @@ const registrationRoutes = require("./routes/registration.routes");
 const adminRoutes = require("./routes/admin.routes");
 const eventRoutes = require("./routes/event.routes");
 const leaderboardRoutes = require("./routes/leaderboard.routes");
+const runRoutes = require("./routes/run.routes");
 
 const app = express();
 
@@ -50,6 +51,7 @@ app.use("/api/register", registrationRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/events", eventRoutes);
 app.use("/api/leaderboard", leaderboardRoutes);
+app.use("/api", runRoutes);
 
 /* ===============================
    404 HANDLER
