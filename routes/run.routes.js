@@ -1,20 +1,23 @@
 const express = require("express");
 const router = express.Router();
+const multer = require("multer");
+const cloudinary = require("../config/cloudinary");
+const fs = require("fs");
 
 const RunSubmission = require("../models/RunSubmission");
-const User = require("../models/User"); // ✅ FIX
+const User = require("../models/User");
+
+// multer temp storage
+const upload = multer({ dest: "uploads/" });
 
 
-// 🔍 Search Runner
+// 🔍 Search Runner (FIXED)
 router.post("/search-runner", async (req, res) => {
   try {
     const { query } = req.body;
 
     const runner = await User.findOne({
-      $or: [
-        { email: query },
-        { phone: query }
-      ]
+      $or: [{ email: query }, { phone: query }]
     });
 
     if (!runner) {
@@ -30,11 +33,12 @@ router.post("/search-runner", async (req, res) => {
 });
 
 
-// 📤 Submit Run
-router.post("/submit-run", async (req, res) => {
+// 📤 Submit Run (CLOUDINARY)
+router.post("/submit-run", upload.single("image"), async (req, res) => {
   try {
     const { name, email, phone, distance } = req.body;
 
+    // duplicate check
     const existing = await RunSubmission.findOne({ email });
 
     if (existing) {
@@ -43,11 +47,23 @@ router.post("/submit-run", async (req, res) => {
       });
     }
 
+    let imageUrl = "";
+
+    // 🔥 Upload to Cloudinary
+    if (req.file) {
+      const result = await cloudinary.uploader.upload(req.file.path);
+      imageUrl = result.secure_url;
+
+      // temp file delete
+      fs.unlinkSync(req.file.path);
+    }
+
     await RunSubmission.create({
       name,
       email,
       phone,
-      distance
+      distance,
+      image: imageUrl
     });
 
     res.json({

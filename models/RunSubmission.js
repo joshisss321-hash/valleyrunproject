@@ -5,6 +5,7 @@ const schema = new mongoose.Schema({
   email: String,
   phone: String,
   distance: String,
+   image: String,
   status: {
     type: String,
     default: "pending"
