@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 
 const RunSubmission = require("../models/RunSubmission");
-const Registration = require("../models/Registration");
+const User = require("../models/User"); // ✅ FIX
 
 
 // 🔍 Search Runner
@@ -10,8 +10,11 @@ router.post("/search-runner", async (req, res) => {
   try {
     const { query } = req.body;
 
-    const runner = await Registration.findOne({
-      $or: [{ email: query }, { phone: query }]
+    const runner = await User.findOne({
+      $or: [
+        { email: query },
+        { phone: query }
+      ]
     });
 
     if (!runner) {
@@ -32,7 +35,6 @@ router.post("/submit-run", async (req, res) => {
   try {
     const { name, email, phone, distance } = req.body;
 
-    // duplicate check
     const existing = await RunSubmission.findOne({ email });
 
     if (existing) {
