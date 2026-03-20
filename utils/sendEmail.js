@@ -2,33 +2,51 @@ const nodemailer = require("nodemailer");
 
 const transporter = nodemailer.createTransport({
   host: process.env.EMAIL_HOST,
-  port: Number(process.env.EMAIL_PORT), // 587
+  port: 587,
   secure: false,
 
   auth: {
-    user: process.env.EMAIL_USER, // a00293001@smtp-brevo.com
-    pass: process.env.EMAIL_PASS, // Brevo SMTP password
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
   },
 
-  // 🔥 RENDER FIX (MOST IMPORTANT)
   tls: {
     rejectUnauthorized: false,
+    ciphers: "SSLv3",
   },
 
-  pool: true,
-  maxConnections: 1,
-  maxMessages: 5,
+  // ✅ Render ke liye optimized timeouts
+  connectionTimeout: 60000,
+  greetingTimeout: 30000,
+  socketTimeout: 60000,
 
-  connectionTimeout: 20000,
-  greetingTimeout: 20000,
-  socketTimeout: 20000,
+  // ✅ Pool OFF karo — Render pe pool issue hota hai
+  pool: false,
 });
 
 const sendEmail = async ({ to, subject, html }) => {
   try {
     console.log("📧 Sending email to:", to);
 
-    const info = await transporter.sendMail({
+    // ✅ Har baar fresh transporter banao — Render pe yahi kaam karta hai
+    const freshTransporter = nodemailer.createTransport({
+      host: process.env.EMAIL_HOST,
+      port: 587,
+      secure: false,
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+      },
+      tls: {
+        rejectUnauthorized: false,
+        ciphers: "SSLv3",
+      },
+      connectionTimeout: 60000,
+      greetingTimeout: 30000,
+      socketTimeout: 60000,
+    });
+
+    const info = await freshTransporter.sendMail({
       from: `"Valley Run" <${process.env.EMAIL_REPLY_TO}>`,
       to,
       replyTo: process.env.EMAIL_REPLY_TO,
