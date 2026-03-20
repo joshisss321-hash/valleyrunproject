@@ -1,60 +1,60 @@
-const nodemailer = require("nodemailer");
-
-const transporter = nodemailer.createTransport({
-  host: process.env.EMAIL_HOST,
-  port: 587,
-  secure: false,
-
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-
-  tls: {
-    rejectUnauthorized: false,
-    ciphers: "SSLv3",
-  },
-
-  // ✅ Render ke liye optimized timeouts
-  connectionTimeout: 60000,
-  greetingTimeout: 30000,
-  socketTimeout: 60000,
-
-  // ✅ Pool OFF karo — Render pe pool issue hota hai
-  pool: false,
-});
+const https = require("https");
 
 const sendEmail = async ({ to, subject, html }) => {
   try {
     console.log("📧 Sending email to:", to);
 
-    // ✅ Har baar fresh transporter banao — Render pe yahi kaam karta hai
-    const freshTransporter = nodemailer.createTransport({
-      host: process.env.EMAIL_HOST,
-      port: 587,
-      secure: false,
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
+    const payload = JSON.stringify({
+      sender: {
+        name: "Valley Run",
+        email: process.env.EMAIL_REPLY_TO,
       },
-      tls: {
-        rejectUnauthorized: false,
-        ciphers: "SSLv3",
-      },
-      connectionTimeout: 60000,
-      greetingTimeout: 30000,
-      socketTimeout: 60000,
-    });
-
-    const info = await freshTransporter.sendMail({
-      from: `"Valley Run" <${process.env.EMAIL_REPLY_TO}>`,
-      to,
-      replyTo: process.env.EMAIL_REPLY_TO,
+      to: [{ email: to }],
       subject,
-      html,
+      htmlContent: html,
     });
 
-    console.log("✅ Email sent:", info.messageId);
+    await new Promise((resolve, reject) => {
+      const options = {
+        hostname: "api.brevo.com",
+        path: "/v3/smtp/email",
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "api-key": process.env.BREVO_API_KEY,
+          "Content-Length": Buffer.byteLength(payload),
+        },
+      };
+
+      const req = https.request(options, (res) => {
+        let data = "";
+        res.on("data", (chunk) => { data += chunk; });
+        res.on("end", () => {
+          if (res.statusCode >= 200 && res.statusCode < 300) {
+            console.log("✅ Email sent via Brevo API");
+            resolve(true);
+          } else {
+            console.error("❌ Brevo API error:", data);
+            resolve(false);
+          }
+        });
+      });
+
+      req.on("error", (err) => {
+        console.error("❌ Email request error:", err.message);
+        resolve(false);
+      });
+
+      req.setTimeout(30000, () => {
+        console.error("❌ Email request timeout");
+        req.destroy();
+        resolve(false);
+      });
+
+      req.write(payload);
+      req.end();
+    });
+
     return true;
   } catch (err) {
     console.error("❌ Email error:", err.message);
