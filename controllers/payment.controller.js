@@ -161,7 +161,7 @@ const crypto = require("crypto");
 const Registration = require("../models/Registration");
 const Event = require("../models/Event");
 const User = require("../models/User");
-const sendEmail = require("../utils/mail"); // ✅ correct path
+const sendEmail = require("../utils/sendEmail"); // ✅ correct path
 
 const razorpay = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID,
