@@ -8,6 +8,9 @@ const eventSchema = new mongoose.Schema(
     dates: String,
     price: { type: Number, default: 349 },
 
+     registrationDeadline: Date,
+
+
     // 🔹 IMAGES (SEPARATE PURPOSE)
     heroImage: String,     // hero section background
     coverImage: String,    // challenge card image
