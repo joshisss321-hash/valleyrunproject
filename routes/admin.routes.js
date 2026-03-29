@@ -1,83 +1,64 @@
+// backend/routes/admin.routes.js
+// Apni existing admin.routes.js ko is se replace karo
+
 const express = require("express");
-const jwt = require("jsonwebtoken");
-const Event = require("../models/Event");
-const { protectAdmin } = require("../middlewares/adminAuth");
-
 const router = express.Router();
+const multer = require("multer");
+const path = require("path");
+const adminAuth = require("../middlewares/adminAuth");
+const {
+  adminLogin,
+  getDashboardStats,
+  getAllEvents,
+  createEvent,
+  updateEvent,
+  toggleEventField,
+  deleteEvent,
+  uploadImage,
+  updateEventImages,
+  getAllRegistrations,
+  getEventRegistrations,
+} = require("../controllers/admin.controller");
 
-/* ===============================
-   ADMIN LOGIN
-================================ */
-router.post("/login", (req, res) => {
-  const { email, password } = req.body;
-
-  if (
-    email !== process.env.ADMIN_EMAIL ||
-    password !== process.env.ADMIN_PASSWORD
-  ) {
-    return res.status(401).json({
-      success: false,
-      message: "Invalid admin credentials",
-    });
-  }
-
-  const token = jwt.sign(
-    { role: "admin" },
-    process.env.JWT_SECRET,
-    { expiresIn: "7d" }
-  );
-
-  res.json({
-    success: true,
-    token,
-  });
+// ─── Multer setup (image upload ke liye) ────────────────────────────────────
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, "uploads/"),
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    cb(null, `${Date.now()}-${Math.random().toString(36).substr(2, 9)}${ext}`);
+  },
 });
 
-/* ===============================
-   GET ALL EVENTS (ADMIN)
-================================ */
-router.get("/events", protectAdmin, async (req, res) => {
-  try {
-    const events = await Event.find().sort({ createdAt: -1 });
-    res.json({ success: true, events });
-  } catch (err) {
-    res.status(500).json({ success: false, message: "Server error" });
-  }
-});
+const fileFilter = (req, file, cb) => {
+  const allowed = ["image/jpeg", "image/png", "image/webp", "image/jpg"];
+  if (allowed.includes(file.mimetype)) cb(null, true);
+  else cb(new Error("Only images allowed"), false);
+};
 
-/* ===============================
-   GET SINGLE EVENT (EDIT PAGE)
-================================ */
-router.get("/events/:id", protectAdmin, async (req, res) => {
-  try {
-    const event = await Event.findById(req.params.id);
-    if (!event) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Event not found" });
-    }
+const upload = multer({ storage, fileFilter, limits: { fileSize: 5 * 1024 * 1024 } }); // 5MB max
 
-    res.json({ success: true, event });
-  } catch (err) {
-    res.status(500).json({ success: false, message: "Server error" });
-  }
-});
+// ─── PUBLIC ROUTES ──────────────────────────────────────────────────────────
+router.post("/login", adminLogin);
 
-/* ===============================
-   UPDATE EVENT
-================================ */
-router.put("/events/:id", protectAdmin, async (req, res) => {
-  try {
-    const updated = await Event.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      { new: true }
-    );
+// ─── PROTECTED ROUTES (adminAuth middleware lagega) ──────────────────────────
+router.use(adminAuth); // Yahan se neeche sab routes protected hain
 
-    res.json({ success: true, event: updated });
-  } catch (err) {
-    res.status(500).json({ success: false, message: "Update failed" });
-  }
-});
+// Dashboard
+router.get("/dashboard", getDashboardStats);
+
+// Events CRUD
+router.get("/events", getAllEvents);
+router.post("/events", createEvent);
+router.put("/events/:id", updateEvent);
+router.patch("/events/:id/toggle", toggleEventField);      // active/reg on-off
+router.patch("/events/:id/images", updateEventImages);     // images update
+router.delete("/events/:id", deleteEvent);
+
+// Image Upload (Cloudinary)
+router.post("/upload", upload.single("image"), uploadImage);
+
+// Registrations
+router.get("/registrations", getAllRegistrations);
+router.get("/events/:id/registrations", getEventRegistrations);
 
 module.exports = router;
