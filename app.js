@@ -75,17 +75,17 @@ dotenv.config();
 
 const paymentRoutes = require("./routes/payment.routes");
 const registrationRoutes = require("./routes/registration.routes");
-const adminRoutes = require("./routes/admin.routes");
+const adminRoutes = require('./routes/admin.routes');
 const eventRoutes = require("./routes/event.routes");
-const leaderboardRoutes = require("./routes/leaderboard.routes");
+const adminLeaderboardRoutes = require('./routes/admin.leaderboard');
 const runRoutes = require("./routes/run.routes");
 const webhookRoutes = require("./routes/webhook");
-
+const adminUsersRoutes = require('./routes/admin.users');
 
 // 🔥 ADD THESE
-const adminEventRoutes = require("./routes/admin.events");
-const adminSubmissionRoutes = require("./routes/admin.submissions");
-const adminStatsRoutes = require("./routes/admin.stats");
+const adminEventsRoutes = require('./routes/admin.events');
+const adminSubmissionsRoutes = require('./routes/admin.submissions');
+const adminStatsRoutes = require('./routes/admin.stats');
 
 const app = express();
 
@@ -132,12 +132,13 @@ app.use("/api", runRoutes);
 app.use("/api", webhookRoutes);
 
 // 🔥 ADMIN (IMPORTANT)
-app.use("/api/admin", adminRoutes);
-app.use("/api/admin/events", adminEventRoutes);
-app.use("/api/admin/submissions", adminSubmissionRoutes);
+app.use('/api/admin/events', adminEventsRoutes);
+app.use('/api/admin/submissions', adminSubmissionsRoutes);
 app.use("/api/admin", adminStatsRoutes);
 app.use("/api/admin", adminStatsRoutes);
-
+app.use('/api/admin/users', adminUsersRoutes);
+app.use('/api/admin/leaderboard', adminLeaderboardRoutes);
+app.use('/api/admin', adminRoutes);
 /* ===============================
    404
 ================================ */

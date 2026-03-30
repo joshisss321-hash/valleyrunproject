@@ -1,47 +1,125 @@
-const router = require("express").Router();
+const express = require('express');
+const router = express.Router();
+const { protect } = require('../middleware/auth');
+const RunSubmission = require('../models/RunSubmission');
 
-const RunSubmission = require("../models/RunSubmission");
-const Leaderboard = require("../models/Leaderboard");
+// @route   GET /api/admin/submissions
+// @desc    Get all submissions
+// @access  Private
+router.get('/', protect, async (req, res) => {
+  try {
+    const { status } = req.query;
+    
+    let query = {};
+    if (status) {
+      query.status = status;
+    }
 
-// GET
-router.get("/", async (req, res) => {
-  const data = await RunSubmission.find().sort({ createdAt: -1 });
-  res.json({ data });
+    const submissions = await RunSubmission.find(query)
+      .sort({ createdAt: -1 })
+      .limit(100);
+
+    res.status(200).json({
+      success: true,
+      count: submissions.length,
+      submissions
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
 });
 
-// APPROVE
-router.put("/approve/:id", async (req, res) => {
-  const sub = await RunSubmission.findById(req.params.id);
+// @route   PUT /api/admin/submissions/:id/approve
+// @desc    Approve submission
+// @access  Private
+router.put('/:id/approve', protect, async (req, res) => {
+  try {
+    const submission = await RunSubmission.findById(req.params.id);
 
-  sub.status = "approved";
-  await sub.save();
+    if (!submission) {
+      return res.status(404).json({
+        success: false,
+        message: 'Submission not found'
+      });
+    }
 
-  // 🔥 AUTO LEADERBOARD
-  await Leaderboard.create({
-    name: sub.name,
-    distance: sub.distance,
-    eventSlug: sub.eventSlug
-  });
+    submission.status = 'approved';
+    await submission.save();
 
-  res.json({ success: true });
+    res.status(200).json({
+      success: true,
+      submission
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
 });
 
-// REJECT
-router.put("/reject/:id", async (req, res) => {
-  await RunSubmission.findByIdAndUpdate(req.params.id, {
-    status: "rejected"
-  });
+// @route   PUT /api/admin/submissions/:id/reject
+// @desc    Reject submission
+// @access  Private
+router.put('/:id/reject', protect, async (req, res) => {
+  try {
+    const submission = await RunSubmission.findById(req.params.id);
 
-  res.json({ success: true });
+    if (!submission) {
+      return res.status(404).json({
+        success: false,
+        message: 'Submission not found'
+      });
+    }
+
+    submission.status = 'rejected';
+    await submission.save();
+
+    res.status(200).json({
+      success: true,
+      submission
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
 });
 
-// CERTIFICATE
-router.put("/certificate/:id", async (req, res) => {
-  await RunSubmission.findByIdAndUpdate(req.params.id, {
-    certificateSent: true
-  });
+// @route   DELETE /api/admin/submissions/:id
+// @desc    Delete submission
+// @access  Private
+router.delete('/:id', protect, async (req, res) => {
+  try {
+    const submission = await RunSubmission.findById(req.params.id);
 
-  res.json({ success: true });
+    if (!submission) {
+      return res.status(404).json({
+        success: false,
+        message: 'Submission not found'
+      });
+    }
+
+    await RunSubmission.findByIdAndDelete(req.params.id);
+
+    res.status(200).json({
+      success: true,
+      message: 'Submission deleted successfully'
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
 });
 
 module.exports = router;
