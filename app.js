@@ -127,7 +127,7 @@ app.get("/", (req, res) => {
 app.use("/api/payment", paymentRoutes);
 app.use("/api/register", registrationRoutes);
 app.use("/api/events", eventRoutes);
-app.use("/api/leaderboard", leaderboardRoutes);
+// app.use("/api/leaderboard", leaderboardRoutes);
 app.use("/api", runRoutes);
 app.use("/api", webhookRoutes);
 
