@@ -276,22 +276,42 @@ const verifyPayment = async (req, res) => {
       user.pincode = pincode;
       user.source = source;
 
-      if (!user.joinedEvents.includes(event._id)) {
-        user.joinedEvents.push(event._id);
-      }
+     if (!user.joinedEvents.some(id => id.toString() === event._id.toString())) {
+  user.joinedEvents.push(event._id);
+}
 
       await user.save();
     }
 
     // ✅ Save registration
-    await Registration.create({
-      user: user._id,
-      event: event._id,
-      category,
-      paymentId: razorpay_payment_id,
-      orderId: razorpay_order_id,
-      status: "paid",
-    });
+    // await Registration.create({
+    //   user: user._id,
+    //   event: event._id,
+    //   category,
+    //   paymentId: razorpay_payment_id,
+    //   orderId: razorpay_order_id,
+    //   status: "paid",
+    // });const safeCategory = category || "General";
+
+const existing = await Registration.findOne({
+  user: user._id,
+  event: event._id,
+});
+
+if (!existing) {
+  await Registration.create({
+    user: user._id,
+    event: event._id,
+    category: safeCategory,
+    paymentId: razorpay_payment_id,
+    orderId: razorpay_order_id,
+    status: "paid",
+  });
+
+  console.log("✅ Registration saved");
+} else {
+  console.log("⚠️ Already registered");
+}
 
     // ✅ Response turant bhejo — user wait na kare
     res.json({
@@ -358,7 +378,7 @@ const verifyPayment = async (req, res) => {
                 </div>
                 <div class="detail-row">
                   <span class="detail-label">Category</span>
-                  <span class="detail-value">${category}</span>
+                  <span class="detail-value">${safeCategory}</span>
                 </div>
                 <div class="detail-row">
                   <span class="detail-label">Run Dates</span>
@@ -378,7 +398,7 @@ const verifyPayment = async (req, res) => {
                 <h3>How the Event Works</h3>
                 <div class="step">
                   <div class="step-num">1</div>
-                  <div class="step-text"><strong>Run from any location</strong> — park, road, treadmill, or track. Complete your chosen distance of ${category}.</div>
+                  <div class="step-text"><strong>Run from any location</strong> — park, road, treadmill, or track. Complete your chosen distance of ${safeCategory}.</div>
                 </div>
                 <div class="step">
                   <div class="step-num">2</div>
