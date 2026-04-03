@@ -161,7 +161,7 @@ const crypto = require("crypto");
 const Registration = require("../models/Registration");
 const Event = require("../models/Event");
 const User = require("../models/User");
-const sendEmail = require("../utils/sendEmail"); // ✅ correct path
+const sendEmail = require("../utils/sendEmail");
 
 const razorpay = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID,
@@ -239,6 +239,9 @@ const verifyPayment = async (req, res) => {
       });
     }
 
+    // ✅ FIX 1: safeCategory sabse pehle declare karo — sahi scope mein
+    const safeCategory = category || "General";
+
     // ✅ Find event
     const event = await Event.findOne({ slug: eventSlug });
     if (!event) {
@@ -252,6 +255,7 @@ const verifyPayment = async (req, res) => {
     let user = await User.findOne({ email });
 
     if (!user) {
+      // ✅ FIX 2: New user ke liye bhi object format mein push karo
       user = await User.create({
         name,
         email,
@@ -263,7 +267,7 @@ const verifyPayment = async (req, res) => {
         state,
         pincode,
         source,
-        joinedEvents: [event._id],
+        joinedEvents: [{ eventId: event._id, eventSlug }],
       });
     } else {
       user.name = name;
@@ -276,51 +280,43 @@ const verifyPayment = async (req, res) => {
       user.pincode = pincode;
       user.source = source;
 
-     if (!user.joinedEvents.some(id => id.toString() === event._id.toString())) {
-  user.joinedEvents.push(event._id);
-}
+      // ✅ FIX 3: Existing user ke liye bhi object format — schema match karta hai
+      if (!user.joinedEvents.some((e) => e.eventSlug === eventSlug)) {
+        user.joinedEvents.push({ eventId: event._id, eventSlug });
+      }
 
+      // ✅ FIX 4: await user.save() sahi jagah — else block ke andar
       await user.save();
     }
 
     // ✅ Save registration
-    // await Registration.create({
-    //   user: user._id,
-    //   event: event._id,
-    //   category,
-    //   paymentId: razorpay_payment_id,
-    //   orderId: razorpay_order_id,
-    //   status: "paid",
-    // });const safeCategory = category || "General";
+    const existing = await Registration.findOne({
+      user: user._id,
+      event: event._id,
+    });
 
-const existing = await Registration.findOne({
-  user: user._id,
-  event: event._id,
-});
+    if (!existing) {
+      await Registration.create({
+        user: user._id,
+        event: event._id,
+        category: safeCategory,
+        paymentId: razorpay_payment_id,
+        orderId: razorpay_order_id,
+        status: "paid",
+      });
 
-if (!existing) {
-  await Registration.create({
-    user: user._id,
-    event: event._id,
-    category: safeCategory,
-    paymentId: razorpay_payment_id,
-    orderId: razorpay_order_id,
-    status: "paid",
-  });
+      console.log("✅ Registration saved");
+    } else {
+      console.log("⚠️ Already registered");
+    }
 
-  console.log("✅ Registration saved");
-} else {
-  console.log("⚠️ Already registered");
-}
-
-    // ✅ Response turant bhejo — user wait na kare
+    // ✅ Response turant bhejo
     res.json({
       success: true,
       message: "Payment verified successfully",
     });
 
     // ✅ Email background mein — non-blocking
-    // Agar email fail bhi ho toh registration safe rahegi
     sendEmail({
       to: email,
       subject: `Your Registration is Confirmed – Valley Run ${event.title}`,
@@ -440,7 +436,6 @@ if (!existing) {
         </html>
       `,
     }).catch((emailErr) => {
-      // Email fail hone pe bhi registration safe hai
       console.error("❌ Email failed:", emailErr.message);
     });
 
