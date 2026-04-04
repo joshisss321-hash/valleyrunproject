@@ -1,10 +1,11 @@
 const express = require("express");
 const router = express.Router();
-const { submitMedalReview } = require("../controllers/medalReview.controller");
 const multer = require("multer");
- 
-const upload = multer({ storage: multer.memoryStorage() });
- 
+const { submitMedalReview } = require("../controllers/medalReview.controller");
+
+// ✅ same as run.routes.js
+const upload = multer({ dest: "uploads/" });
+
 router.post("/submit-medal-review", upload.single("image"), submitMedalReview);
- 
+
 module.exports = router;

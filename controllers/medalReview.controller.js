@@ -1,11 +1,6 @@
 const MedalReview = require("../models/MedalReview");
-const cloudinary = require("cloudinary").v2;
-
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key:    process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
+const cloudinary = require("../config/cloudinary"); // ✅ same as run.routes.js
+const fs = require("fs");
 
 const submitMedalReview = async (req, res) => {
   try {
@@ -18,22 +13,18 @@ const submitMedalReview = async (req, res) => {
     }
 
     // Upload image to Cloudinary
-    const uploadResult = await new Promise((resolve, reject) => {
-      cloudinary.uploader.upload_stream(
-        { folder: "medal-reviews" },
-        (error, result) => {
-          if (error) reject(error);
-          else resolve(result);
-        }
-      ).end(file.buffer);
-    });
+    const result = await cloudinary.uploader.upload(file.path);
+    const imageUrl = result.secure_url;
+
+    // Delete temp file
+    fs.unlinkSync(file.path);
 
     // Save to DB
     await MedalReview.create({
       name,
       instaId,
       review,
-      imageUrl: uploadResult.secure_url,
+      imageUrl,
     });
 
     res.json({ success: true, message: "Review submitted successfully" });
