@@ -18,15 +18,15 @@
 
 // module.exports = mongoose.model("RunSubmission", schema);
 
-import mongoose from "mongoose";
+const mongoose = require("mongoose");
 
 const RunSubmissionSchema = new mongoose.Schema({
   name:     { type: String, required: true },
   email:    { type: String, required: true },
   phone:    { type: String, required: true },
   distance: { type: String, required: true },
-  imageUrl: { type: String, required: true },  // Cloudinary image URL
+  imageUrl: { type: String, required: true },
+  status:   { type: String, default: "pending" },
 }, { timestamps: true });
 
-export default mongoose.models.RunSubmission ||
-  mongoose.model("RunSubmission", RunSubmissionSchema);
+module.exports = mongoose.model("RunSubmission", RunSubmissionSchema);
