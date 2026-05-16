@@ -1,9 +1,9 @@
-const cloudinary = require("cloudinary").v2;
+const ImageKit = require("imagekit");
 
-cloudinary.config({
-  cloud_name: process.env.CLOUD_NAME,
-  api_key: process.env.API_KEY,
-  api_secret: process.env.API_SECRET,
+const imagekit = new ImageKit({
+  publicKey:   process.env.IMAGEKIT_PUBLIC_KEY,
+  privateKey:  process.env.IMAGEKIT_PRIVATE_KEY,
+  urlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT,
 });
 
-module.exports = cloudinary;
+module.exports = imagekit;
