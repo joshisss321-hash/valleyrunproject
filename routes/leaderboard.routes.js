@@ -1,36 +1,35 @@
-const express = require("express");
-const Leaderboard = require("../models/Leaderboard");
-const Event = require("../models/Event"); // Event model import karo
+const express       = require("express");
+const router        = express.Router();
+const RunSubmission = require("../models/RunSubmission");
 
-const router = express.Router();
-
-/* ===============================
-   GET LEADERBOARD BY EVENT SLUG
-================================ */
+// GET /api/leaderboard/:slug
 router.get("/:slug", async (req, res) => {
   try {
-    // Pehle slug se event dhundho
-    const event = await Event.findOne({ slug: req.params.slug });
+    const { slug }     = req.params;
+    const { distance } = req.query;
 
-    if (!event) {
-      return res.json({ success: true, rows: [] });
-    }
+    const filter = {
+      eventSlug: slug,
+      status:    "approved",
+    };
+    if (distance) filter.distance = distance;
 
-    // Phir us event ki leaderboard entries fetch karo
-    const rows = await Leaderboard.find({
-      event: event._id,
-    }).sort({ createdAt: 1 });
+    const entries = await RunSubmission.find(filter)
+      .sort({ timingSeconds: 1 })
+      .lean();
 
-    res.json({
-      success: true,
-      rows,
-    });
+    const ranked = entries.map((e, i) => ({
+      rank:          i + 1,
+      name:          e.name,
+      distance:      e.distance,
+      timing:        e.timing || "—",
+      timingSeconds: e.timingSeconds,
+    }));
+
+    res.json({ success: true, entries: ranked });
   } catch (err) {
-    console.error("Leaderboard fetch error:", err);
-    res.status(500).json({
-      success: false,
-      message: "Failed to load leaderboard",
-    });
+    console.error(err);
+    res.status(500).json({ success: false, message: "Server error" });
   }
 });
 
