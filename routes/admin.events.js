@@ -1,16 +1,22 @@
-const express  = require("express");
-const router   = express.Router();
-const multer   = require("multer");
-const { protect } = require("../middleware/auth");
-const Event        = require("../models/Event");
-const Registration = require("../models/Registration");
-const { uploadToCloudinary } = require("../utils/cloudinary");
+const express    = require('express');
+const router     = express.Router();
+const multer     = require('multer');
+const fs         = require('fs');
+const { protect } = require('../middleware/auth');
+const Event      = require('../models/Event');
+const Registration = require('../models/Registration');
+const ImageKit   = require('imagekit');
 
-const storage = multer.memoryStorage();
-const upload  = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } });
+const imagekit = new ImageKit({
+  publicKey:   process.env.IMAGEKIT_PUBLIC_KEY,
+  privateKey:  process.env.IMAGEKIT_PRIVATE_KEY,
+  urlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT,
+});
+
+const upload = multer({ dest: 'uploads/' });
 
 // GET /api/admin/events
-router.get("/", protect, async (req, res) => {
+router.get('/', protect, async (req, res) => {
   try {
     const events = await Event.find().sort({ createdAt: -1 }).lean();
     const withCounts = await Promise.all(
@@ -26,10 +32,10 @@ router.get("/", protect, async (req, res) => {
 });
 
 // GET /api/admin/events/:id
-router.get("/:id", protect, async (req, res) => {
+router.get('/:id', protect, async (req, res) => {
   try {
     const event = await Event.findById(req.params.id);
-    if (!event) return res.status(404).json({ success: false, message: "Not found" });
+    if (!event) return res.status(404).json({ success: false, message: 'Not found' });
     const registrationCount = await Registration.countDocuments({ event: event._id });
     res.json({ success: true, event, registrationCount });
   } catch (err) {
@@ -37,11 +43,11 @@ router.get("/:id", protect, async (req, res) => {
   }
 });
 
-// POST /api/admin/events — Create
-router.post("/", protect, async (req, res) => {
+// POST /api/admin/events
+router.post('/', protect, async (req, res) => {
   try {
     const existing = await Event.findOne({ slug: req.body.slug });
-    if (existing) return res.status(400).json({ success: false, message: "Slug already taken" });
+    if (existing) return res.status(400).json({ success: false, message: 'Slug already taken' });
     const event = await Event.create(req.body);
     res.status(201).json({ success: true, event });
   } catch (err) {
@@ -49,11 +55,13 @@ router.post("/", protect, async (req, res) => {
   }
 });
 
-// PUT /api/admin/events/:id — Update
-router.put("/:id", protect, async (req, res) => {
+// PUT /api/admin/events/:id
+router.put('/:id', protect, async (req, res) => {
   try {
-    const event = await Event.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
-    if (!event) return res.status(404).json({ success: false, message: "Not found" });
+    const event = await Event.findByIdAndUpdate(
+      req.params.id, req.body, { new: true, runValidators: true }
+    );
+    if (!event) return res.status(404).json({ success: false, message: 'Not found' });
     res.json({ success: true, event });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -61,31 +69,47 @@ router.put("/:id", protect, async (req, res) => {
 });
 
 // DELETE /api/admin/events/:id
-router.delete("/:id", protect, async (req, res) => {
+router.delete('/:id', protect, async (req, res) => {
   try {
     await Event.findByIdAndDelete(req.params.id);
-    res.json({ success: true, message: "Event deleted" });
+    res.json({ success: true, message: 'Deleted' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 });
 
-// POST /api/admin/events/upload-image — Upload any image to Cloudinary
-// body: multipart with field "image" + query ?type=heroImage|coverImage|medalImage|medalImageBack|gallery
-router.post("/upload-image", protect, upload.single("image"), async (req, res) => {
+// POST /api/admin/events/upload-image — ImageKit upload
+router.post('/upload-image', protect, upload.single('image'), async (req, res) => {
+  const cleanup = () => {
+    if (req.file && fs.existsSync(req.file.path)) {
+      try { fs.unlinkSync(req.file.path); } catch {}
+    }
+  };
   try {
-    if (!req.file) return res.status(400).json({ success: false, message: "No file" });
-    const type   = req.query.type || "general";
-    const folder = `valleyrun/events/${type}`;
-    const url    = await uploadToCloudinary(req.file.buffer, folder);
-    res.json({ success: true, url });
+    if (!req.file) return res.status(400).json({ success: false, message: 'No file' });
+
+    const type   = req.query.type || req.body.type || 'general';
+    const folder = `/valleyrun/events/${type}`;
+
+    // ✅ ImageKit upload
+    const fileBuffer = fs.readFileSync(req.file.path);
+    const result = await imagekit.upload({
+      file:     fileBuffer,
+      fileName: `${Date.now()}_${req.file.originalname || 'image.jpg'}`,
+      folder:   folder,
+    });
+    cleanup();
+
+    res.json({ success: true, url: result.url });
   } catch (err) {
+    cleanup();
+    console.error('Image upload error:', err);
     res.status(500).json({ success: false, message: err.message });
   }
 });
 
-// PATCH /api/admin/events/:id/gallery/add  { imageUrl }
-router.patch("/:id/gallery/add", protect, async (req, res) => {
+// PATCH /api/admin/events/:id/gallery/add
+router.patch('/:id/gallery/add', protect, async (req, res) => {
   try {
     const event = await Event.findByIdAndUpdate(
       req.params.id,
@@ -98,8 +122,8 @@ router.patch("/:id/gallery/add", protect, async (req, res) => {
   }
 });
 
-// PATCH /api/admin/events/:id/gallery/remove  { imageUrl }
-router.patch("/:id/gallery/remove", protect, async (req, res) => {
+// PATCH /api/admin/events/:id/gallery/remove
+router.patch('/:id/gallery/remove', protect, async (req, res) => {
   try {
     const event = await Event.findByIdAndUpdate(
       req.params.id,
