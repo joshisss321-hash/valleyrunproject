@@ -1,179 +1,114 @@
-const express = require('express');
-const router = express.Router();
-const { protect } = require('../middleware/auth');
-const Event = require('../models/Event');
-const multer = require('multer');
-const { uploadToCloudinary, deleteFromCloudinary } = require('../utils/cloudinary');
+const express  = require("express");
+const router   = express.Router();
+const multer   = require("multer");
+const { protect } = require("../middleware/auth");
+const Event        = require("../models/Event");
+const Registration = require("../models/Registration");
+const { uploadToCloudinary } = require("../utils/cloudinary");
 
-// Configure multer for memory storage
 const storage = multer.memoryStorage();
-const upload = multer({ storage });
+const upload  = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } });
 
-// @route   GET /api/admin/events
-// @desc    Get all events
-// @access  Private
-router.get('/', protect, async (req, res) => {
+// GET /api/admin/events
+router.get("/", protect, async (req, res) => {
   try {
-    const events = await Event.find().sort({ createdAt: -1 });
-    
-    res.status(200).json({
-      success: true,
-      count: events.length,
-      events
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error'
-    });
-  }
-});
-
-// @route   GET /api/admin/events/:id
-// @desc    Get single event
-// @access  Private
-router.get('/:id', protect, async (req, res) => {
-  try {
-    const event = await Event.findById(req.params.id);
-    
-    if (!event) {
-      return res.status(404).json({
-        success: false,
-        message: 'Event not found'
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      event
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error'
-    });
-  }
-});
-
-// @route   POST /api/admin/events
-// @desc    Create event
-// @access  Private
-router.post('/', protect, async (req, res) => {
-  try {
-    const eventData = req.body;
-
-    // Create event
-    const event = await Event.create(eventData);
-
-    res.status(201).json({
-      success: true,
-      event
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error',
-      error: error.message
-    });
-  }
-});
-
-// @route   PUT /api/admin/events/:id
-// @desc    Update event
-// @access  Private
-router.put('/:id', protect, async (req, res) => {
-  try {
-    const event = await Event.findById(req.params.id);
-
-    if (!event) {
-      return res.status(404).json({
-        success: false,
-        message: 'Event not found'
-      });
-    }
-
-    const updatedEvent = await Event.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      { new: true, runValidators: true }
+    const events = await Event.find().sort({ createdAt: -1 }).lean();
+    const withCounts = await Promise.all(
+      events.map(async (ev) => ({
+        ...ev,
+        registrationCount: await Registration.countDocuments({ event: ev._id }),
+      }))
     );
-
-    res.status(200).json({
-      success: true,
-      event: updatedEvent
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error',
-      error: error.message
-    });
+    res.json({ success: true, events: withCounts });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
   }
 });
 
-// @route   DELETE /api/admin/events/:id
-// @desc    Delete event
-// @access  Private
-router.delete('/:id', protect, async (req, res) => {
+// GET /api/admin/events/:id
+router.get("/:id", protect, async (req, res) => {
   try {
     const event = await Event.findById(req.params.id);
-
-    if (!event) {
-      return res.status(404).json({
-        success: false,
-        message: 'Event not found'
-      });
-    }
-
-    await Event.findByIdAndDelete(req.params.id);
-
-    res.status(200).json({
-      success: true,
-      message: 'Event deleted successfully'
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error'
-    });
+    if (!event) return res.status(404).json({ success: false, message: "Not found" });
+    const registrationCount = await Registration.countDocuments({ event: event._id });
+    res.json({ success: true, event, registrationCount });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
   }
 });
 
-// @route   POST /api/admin/events/upload
-// @desc    Upload image to cloudinary
-// @access  Private
-router.post('/upload', protect, upload.single('image'), async (req, res) => {
+// POST /api/admin/events — Create
+router.post("/", protect, async (req, res) => {
   try {
-    if (!req.file) {
-      return res.status(400).json({
-        success: false,
-        message: 'No file uploaded'
-      });
-    }
+    const existing = await Event.findOne({ slug: req.body.slug });
+    if (existing) return res.status(400).json({ success: false, message: "Slug already taken" });
+    const event = await Event.create(req.body);
+    res.status(201).json({ success: true, event });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
 
-    // Convert buffer to base64
-    const b64 = Buffer.from(req.file.buffer).toString('base64');
-    const dataURI = `data:${req.file.mimetype};base64,${b64}`;
+// PUT /api/admin/events/:id — Update
+router.put("/:id", protect, async (req, res) => {
+  try {
+    const event = await Event.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+    if (!event) return res.status(404).json({ success: false, message: "Not found" });
+    res.json({ success: true, event });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
 
-    const result = await uploadToCloudinary(dataURI, 'events');
+// DELETE /api/admin/events/:id
+router.delete("/:id", protect, async (req, res) => {
+  try {
+    await Event.findByIdAndDelete(req.params.id);
+    res.json({ success: true, message: "Event deleted" });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
 
-    res.status(200).json({
-      success: true,
-      url: result.url,
-      public_id: result.public_id
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({
-      success: false,
-      message: 'Upload failed',
-      error: error.message
-    });
+// POST /api/admin/events/upload-image — Upload any image to Cloudinary
+// body: multipart with field "image" + query ?type=heroImage|coverImage|medalImage|medalImageBack|gallery
+router.post("/upload-image", protect, upload.single("image"), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ success: false, message: "No file" });
+    const type   = req.query.type || "general";
+    const folder = `valleyrun/events/${type}`;
+    const url    = await uploadToCloudinary(req.file.buffer, folder);
+    res.json({ success: true, url });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// PATCH /api/admin/events/:id/gallery/add  { imageUrl }
+router.patch("/:id/gallery/add", protect, async (req, res) => {
+  try {
+    const event = await Event.findByIdAndUpdate(
+      req.params.id,
+      { $push: { gallery: req.body.imageUrl } },
+      { new: true }
+    );
+    res.json({ success: true, gallery: event.gallery });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// PATCH /api/admin/events/:id/gallery/remove  { imageUrl }
+router.patch("/:id/gallery/remove", protect, async (req, res) => {
+  try {
+    const event = await Event.findByIdAndUpdate(
+      req.params.id,
+      { $pull: { gallery: req.body.imageUrl } },
+      { new: true }
+    );
+    res.json({ success: true, gallery: event.gallery });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
   }
 });
 

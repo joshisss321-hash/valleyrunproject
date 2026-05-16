@@ -1,35 +1,3 @@
-// const mongoose = require("mongoose");
-
-// const registrationSchema = new mongoose.Schema(
-//   {
-//     user: {
-//       type: mongoose.Schema.Types.ObjectId,
-//       ref: "User",
-//       required: true,
-//     },
-
-//     event: {
-//       type: mongoose.Schema.Types.ObjectId,
-//       ref: "Event",
-//       required: true,
-//     },
-
-//     category: {
-//       type: String,
-//       required: true,
-//     },
-
-//     paymentId: {
-//       type: String,
-//       required: true,
-//     },
-//   },
-//   {
-//     timestamps: true,
-//   }
-// );
-
-// module.exports = mongoose.model("Registration", registrationSchema);
 const mongoose = require("mongoose");
 
 const registrationSchema = new mongoose.Schema(
@@ -39,38 +7,32 @@ const registrationSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
-
     event: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Event",
       required: true,
     },
+    eventSlug: { type: String, default: "" }, // ✅ for easy filtering
 
-    category: {
+    category:  { type: String, required: true },
+    paymentId: { type: String, required: true },
+    orderId:   { type: String, default: "" },
+    status:    { type: String, default: "paid" },
+    amount:    { type: Number, default: 0 },
+
+    // Medal dispatch tracking
+    medalStatus: {
       type: String,
-      required: true,
+      enum: ["pending", "verified", "dispatched", "delivered"],
+      default: "pending",
     },
-
-    paymentId: {
-      type: String,
-      required: true,
-    },
-
-    // ✅ YE ADD KARO
-    orderId: {
-      type: String,
-    },
-
-    // ✅ YE BHI ADD KARO
-    status: {
-      type: String,
-      default: "paid",
-    },
-
+    trackingId: { type: String, default: "" },
   },
-  {
-    timestamps: true,
-  }
+  { timestamps: true }
 );
+
+// Prevent duplicate registration
+registrationSchema.index({ user: 1, event: 1 }, { unique: true });
+registrationSchema.index({ eventSlug: 1 });
 
 module.exports = mongoose.model("Registration", registrationSchema);
