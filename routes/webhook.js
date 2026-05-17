@@ -16,23 +16,44 @@ router.post(
         const secret    = process.env.RAZORPAY_WEBHOOK_SECRET;
         const signature = req.headers["x-razorpay-signature"];
 
-        if (!secret || !signature) return;
-
-        const payload = Buffer.isBuffer(req.body)
-          ? req.body
-          : Buffer.from(typeof req.body === "string" ? req.body : JSON.stringify(req.body));
-
-        const expected = crypto
-          .createHmac("sha256", secret)
-          .update(payload)
-          .digest("hex");
-
-        if (signature !== expected) {
-          console.log("❌ Invalid signature");
+        if (!secret) {
+          console.log("❌ RAZORPAY_WEBHOOK_SECRET not set in env");
           return;
         }
 
-        const event = JSON.parse(payload.toString());
+        if (!signature) {
+          console.log("❌ No signature header");
+          return;
+        }
+
+        // ✅ Body ko string mein convert karo
+        let rawBody;
+        if (Buffer.isBuffer(req.body)) {
+          rawBody = req.body;
+        } else if (typeof req.body === "string") {
+          rawBody = Buffer.from(req.body);
+        } else {
+          rawBody = Buffer.from(JSON.stringify(req.body));
+        }
+
+        console.log("📦 Raw body length:", rawBody.length);
+        console.log("🔑 Secret (first 5):", secret.substring(0, 5));
+        console.log("📝 Signature:", signature);
+
+        const expected = crypto
+          .createHmac("sha256", secret)
+          .update(rawBody)
+          .digest("hex");
+
+        console.log("✅ Expected:", expected);
+        console.log("📨 Received:", signature);
+
+        if (signature !== expected) {
+          console.log("❌ Signature mismatch");
+          return;
+        }
+
+        const event = JSON.parse(rawBody.toString());
         if (event.event !== "payment.captured") return;
 
         const payment = event.payload.payment.entity;
@@ -41,7 +62,7 @@ router.post(
         // Duplicate check
         const existing = await Registration.findOne({ paymentId: payment.id });
         if (existing) {
-          console.log("⚠️ Already saved by verify-payment");
+          console.log("⚠️ Already saved");
           return;
         }
 
@@ -49,7 +70,7 @@ router.post(
         console.log("📋 Notes:", JSON.stringify(notes));
 
         if (!notes.email || !notes.eventSlug) {
-          console.log("⚠️ Missing notes");
+          console.log("⚠️ Missing notes:", JSON.stringify(notes));
           return;
         }
 
@@ -59,7 +80,6 @@ router.post(
           return;
         }
 
-        // Upsert user with full address
         const user = await User.findOneAndUpdate(
           { email: notes.email.toLowerCase() },
           {
@@ -79,7 +99,7 @@ router.post(
           user:        user._id,
           event:       ev._id,
           eventSlug:   notes.eventSlug,
-          category:    notes.category || "General",
+          category:    notes.category  || "General",
           paymentId:   payment.id,
           orderId:     payment.order_id || "",
           amount:      ev.price || 0,
