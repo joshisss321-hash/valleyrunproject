@@ -1,5 +1,5 @@
 const express = require("express");
-const router  = express.Router();
+const router  = require("express").Router();
 const crypto  = require("crypto");
 const Registration = require("../models/Registration");
 const User         = require("../models/User");
@@ -17,7 +17,7 @@ router.post(
         const signature = req.headers["x-razorpay-signature"];
 
         if (!secret) {
-          console.log("❌ RAZORPAY_WEBHOOK_SECRET not set in env");
+          console.log("❌ RAZORPAY_WEBHOOK_SECRET not set");
           return;
         }
 
@@ -26,7 +26,7 @@ router.post(
           return;
         }
 
-        // ✅ Body ko string mein convert karo
+        // ✅ Raw body
         let rawBody;
         if (Buffer.isBuffer(req.body)) {
           rawBody = req.body;
@@ -36,17 +36,10 @@ router.post(
           rawBody = Buffer.from(JSON.stringify(req.body));
         }
 
-        console.log("📦 Raw body length:", rawBody.length);
-        console.log("🔑 Secret (first 5):", secret.substring(0, 5));
-        console.log("📝 Signature:", signature);
-
         const expected = crypto
           .createHmac("sha256", secret)
           .update(rawBody)
           .digest("hex");
-
-        console.log("✅ Expected:", expected);
-        console.log("📨 Received:", signature);
 
         if (signature !== expected) {
           console.log("❌ Signature mismatch");
@@ -62,7 +55,7 @@ router.post(
         // Duplicate check
         const existing = await Registration.findOne({ paymentId: payment.id });
         if (existing) {
-          console.log("⚠️ Already saved");
+          console.log("⚠️ Already saved by verify-payment");
           return;
         }
 
@@ -70,7 +63,7 @@ router.post(
         console.log("📋 Notes:", JSON.stringify(notes));
 
         if (!notes.email || !notes.eventSlug) {
-          console.log("⚠️ Missing notes:", JSON.stringify(notes));
+          console.log("⚠️ Missing email or eventSlug in notes");
           return;
         }
 
@@ -80,10 +73,13 @@ router.post(
           return;
         }
 
-        const user = await User.findOneAndUpdate(
-          { email: notes.email.toLowerCase() },
-          {
+        // ✅ User create/update — same format as verify-payment
+        let user = await User.findOne({ email: notes.email.toLowerCase() });
+
+        if (!user) {
+          user = await User.create({
             name:     notes.name     || "Runner",
+            email:    notes.email.toLowerCase(),
             phone:    notes.phone    || "",
             address1: notes.address1 || "",
             address2: notes.address2 || "",
@@ -91,10 +87,26 @@ router.post(
             city:     notes.city     || "",
             state:    notes.state    || "",
             pincode:  notes.pincode  || "",
-          },
-          { new: true, upsert: true, setDefaultsOnInsert: true }
-        );
+            joinedEvents: [{ eventId: ev._id, eventSlug: notes.eventSlug }],
+          });
+          console.log("✅ New user created:", notes.email);
+        } else {
+          user.name     = notes.name     || user.name;
+          user.phone    = notes.phone    || user.phone;
+          user.address1 = notes.address1 || user.address1;
+          user.address2 = notes.address2 || user.address2;
+          user.landmark = notes.landmark || user.landmark;
+          user.city     = notes.city     || user.city;
+          user.state    = notes.state    || user.state;
+          user.pincode  = notes.pincode  || user.pincode;
+          if (!user.joinedEvents?.some(e => e.eventSlug === notes.eventSlug)) {
+            user.joinedEvents.push({ eventId: ev._id, eventSlug: notes.eventSlug });
+          }
+          await user.save();
+          console.log("✅ Existing user updated:", notes.email);
+        }
 
+        // ✅ Save registration
         await Registration.create({
           user:        user._id,
           event:       ev._id,
@@ -102,12 +114,12 @@ router.post(
           category:    notes.category  || "General",
           paymentId:   payment.id,
           orderId:     payment.order_id || "",
-          amount:      ev.price || 0,
+          amount:      ev.price        || 0,
           status:      "paid",
           medalStatus: "pending",
         });
 
-        console.log(`✅ Webhook saved: ${notes.email} | ${notes.eventSlug}`);
+        console.log(`✅ Webhook saved: ${notes.email} | ${notes.eventSlug} | ${notes.category}`);
 
       } catch (err) {
         console.error("❌ Webhook Error:", err.message);
