@@ -18,6 +18,8 @@ const adminStats         = require("./routes/admin.stats");
 const adminRegistrations = require("./routes/admin.registrations");
 const medalReviewRoutes  = require("./routes/medalReview.routes");
 const leaderboardRoutes  = require("./routes/leaderboard.routes"); // ✅ NEW
+const adminReviews  = require("./routes/admin.reviews");
+const publicReviews = require("./routes/reviews.public");
 
 const app = express();
 
@@ -53,6 +55,7 @@ app.use("/api/events",      eventRoutes);
 app.use("/api/leaderboard", leaderboardRoutes); // ✅ NEW
 app.use("/api",             runRoutes);
 app.use("/api",             medalReviewRoutes);
+app.use("/api", publicReviews);
 
 /* ── ADMIN ── */
 app.use("/api/admin/events",         adminEvents);
@@ -62,7 +65,7 @@ app.use("/api/admin",                adminStats);
 app.use("/api/admin/users",          adminUsers);
 app.use("/api/admin/leaderboard",    adminLeaderboard);
 app.use("/api/admin",                adminRoutes);
-
+app.use("/api/admin/reviews", adminReviews);
 /* ── 404 ── */
 app.use((_req, res) =>
   res.status(404).json({ success: false, message: "Route not found" })
