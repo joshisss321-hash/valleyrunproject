@@ -245,12 +245,12 @@ const verifyPayment = async (req, res) => {
                   <div class="step-num">2</div>
                   <div class="step-text"><strong>Screenshot</strong> your GPS app (Strava, Nike Run Club, Garmin, Google Fit).</div>
                 </div>
+                   /* <div class="step">
+                      <div class="step-num"></div>
+                      <div class="step-text"><strong>Submit proof</strong> at: <a href="https://valleyrun.in/activity-submission?event=${eventSlug}" style="color:#dc2626">valleyrun.in/activity-submission</a></div>
+                    </div> */
                 <div class="step">
                   <div class="step-num">3</div>
-                  <div class="step-text"><strong>Submit proof</strong> at: <a href="https://valleyrun.in/activity-submission?event=${eventSlug}" style="color:#dc2626">valleyrun.in/activity-submission</a></div>
-                </div>
-                <div class="step">
-                  <div class="step-num">4</div>
                   <div class="step-text"><strong>Receive medal</strong> — Free pan-India delivery after verification!</div>
                 </div>
               </div>
