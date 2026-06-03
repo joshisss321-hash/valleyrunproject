@@ -85,7 +85,11 @@ router.post("/submit-run", upload.single("image"), async (req, res) => {
     }
 
     // ✅ Upload to ImageKit
-    const fileBuffer = fs.readFileSync(req.file.path);
+    const sharp = require("sharp");
+const fileBuffer = await sharp(req.file.path)
+  .resize(1200, 1200, { fit: "inside", withoutEnlargement: true })
+  .jpeg({ quality: 70 })
+  .toBuffer();
     const uploaded = await imagekit.upload({
       file:     fileBuffer,
       fileName: `${Date.now()}.jpg`,
