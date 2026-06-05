@@ -90,7 +90,12 @@ router.get("/:slug", async (req, res) => {
       // Filter by nearest category
       entries = allEntries.filter(e => {
         const cat = getNearestCategory(e.distance);
-        return cat === distance.toUpperCase();
+        // Frontend se "3.2KM" ya "3.2" dono handle karo
+const distUp = distance.toUpperCase();
+const distWithKM = distUp.includes("KM") || distUp.includes("MTR") 
+  ? distUp 
+  : distUp + "KM";
+return cat === distWithKM;
       });
     }
 
