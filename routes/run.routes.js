@@ -21,23 +21,31 @@ router.post("/search-runner", async (req, res) => {
     if (!query) return res.json({ runner: null });
 
     const q = query.trim();
-    let user = await User.findOne({
-      $or: [{ email: q.toLowerCase() }, { phone: q }],
-    });
 
-    if (!user) {
-      const regByOrder = await Registration.findOne({
-        $or: [{ orderId: q }, { paymentId: q }],
-        ...(eventSlug ? { eventSlug } : {}),
-      }).populate("user");
-      if (regByOrder) user = regByOrder.user;
+    // ✅ Pehle registration dhundho — eventSlug ke saath
+    const registration = await Registration.findOne({
+      eventSlug: eventSlug,  // ✅ event check
+      $or: [
+        { phone: q },
+        { email: q.toLowerCase() },
+        { orderId: q },
+        { paymentId: q },
+      ],
+    }).populate("user");
+
+    if (!registration) {
+      return res.json({ 
+        runner: null, 
+        message: "No registration found for this event" 
+      });
     }
 
-    if (!user) return res.json({ runner: null, message: "No registration found" });
+    const user = registration.user;
+    if (!user) return res.json({ runner: null });
 
     const alreadySubmitted = await RunSubmission.findOne({
       email: user.email,
-      ...(eventSlug ? { eventSlug } : {}),
+      eventSlug: eventSlug,
     });
 
     res.json({
