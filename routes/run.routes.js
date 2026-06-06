@@ -22,16 +22,23 @@ router.post("/search-runner", async (req, res) => {
 
     const q = query.trim();
 
-    // ✅ Pehle registration dhundho — eventSlug ke saath
+    // ✅ Pehle User dhundho phone/email se
+    const user = await User.findOne({
+      $or: [{ phone: q }, { email: q.toLowerCase() }],
+    });
+
+    if (!user) {
+      return res.json({ 
+        runner: null, 
+        message: "No registration found for this event" 
+      });
+    }
+
+    // ✅ Phir check karo is event mein registered hai ya nahi
     const registration = await Registration.findOne({
-      eventSlug: eventSlug,  // ✅ event check
-      $or: [
-        { phone: q },
-        { email: q.toLowerCase() },
-        { orderId: q },
-        { paymentId: q },
-      ],
-    }).populate("user");
+      user: user._id,
+      eventSlug: eventSlug,
+    });
 
     if (!registration) {
       return res.json({ 
@@ -40,9 +47,7 @@ router.post("/search-runner", async (req, res) => {
       });
     }
 
-    const user = registration.user;
-    if (!user) return res.json({ runner: null });
-
+    // ✅ Already submitted check
     const alreadySubmitted = await RunSubmission.findOne({
       email: user.email,
       eventSlug: eventSlug,
