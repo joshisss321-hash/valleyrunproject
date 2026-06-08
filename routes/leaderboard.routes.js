@@ -79,10 +79,20 @@ router.get("/:slug", async (req, res) => {
     const { distance } = req.query;
 
     // Get all approved entries
-    const allEntries = await RunSubmission.find({
-      eventSlug: slug,
-      status:    "approved",
-    }).sort({ timingSeconds: 1 }).lean();
+   const allEntries = await RunSubmission.find({
+  eventSlug: slug,
+  status: "approved",
+}).lean();
+
+// ✅ Valid timing wale pehle, baaki baad mein
+allEntries.sort((a, b) => {
+  const aValid = a.timingSeconds > 0;
+  const bValid = b.timingSeconds > 0;
+  if (aValid && bValid) return a.timingSeconds - b.timingSeconds;
+  if (aValid) return -1;
+  if (bValid) return 1;
+  return 0;
+});
 
     let entries = allEntries;
 
