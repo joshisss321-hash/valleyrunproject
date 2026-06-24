@@ -16,8 +16,7 @@ const registrationSuccessTemplate = ({ name, eventTitle }) => {
     </p>
 
     <p>
-      📩 After completing the challenge, please send your activity screenshot 
-      (Strava / any fitness app) to this email or WhatsApp for verification.
+      📩 Once you complete your distance, go back to the event page where you registered.After registration closes, a "Submit Activity" button will appear there.Click it, enter your registered mobile number to find your registration, and submit your activity screenshot.
     </p>
 
     <hr style="margin:20px 0;" />

@@ -193,7 +193,7 @@ router.post(
                   </div>
                   <div class="step">
                     <div class="step-num">3</div>
-                    <div class="step-text"><strong>Submit proof</strong> at: <a href="https://valleyrun.in/activity-submission?event=${notes.eventSlug}" style="color:#dc2626">valleyrun.in/activity-submission</a></div>
+                    <div class="step-text"><strong>Once you complete your distance, go back to the event page where you registered.After registration closes, a "Submit Activity" button will appear there.Click it, enter your registered mobile number to find your registration, and submit your activity screenshot.</strong> at: <a href="https://valleyrun.in" style="color:#dc2626">valleyrun.in/activity-submission</a></div>
                   </div>
                   <div class="step">
                     <div class="step-num">4</div>
