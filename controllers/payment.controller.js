@@ -246,12 +246,12 @@ const verifyPayment = async (req, res) => {
                   <div class="step-text"><strong>Screenshot</strong> your GPS app (Strava, Nike Run Club, Garmin, Google Fit).</div>
                 </div>
                    /* <div class="step">
-                      <div class="step-num"></div>
+                      <div class="step-num">3</div>
                       <div class="step-text"><strong>Submit proof    
-      📩 Once you complete your distance, go back to the event page where you registered.After registration closes, a "Submit Activity" button will appear there.Click it, enter your registered mobile number to find your registration, and submit your activity screenshot.</strong> at: <a href="https://valleyrun.in" style="color:#dc2626">valleyrun.in</a></div>
+      📩 Once you complete your distance, go back to the event page where you registered.  <a href="https://valleyrun.in" style="color:#dc2626">valleyrun.in</a>.After registration closes, a "Submit Activity" button will appear there.Click it, enter your registered mobile number to find your registration, and submit your activity screenshot.</div>
                     </div> */
                 <div class="step">
-                  <div class="step-num">3</div>
+                  <div class="step-num">4</div>
                   <div class="step-text"><strong>Receive medal</strong> — Free pan-India delivery after verification!</div>
                 </div>
               </div>
