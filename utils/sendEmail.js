@@ -31,7 +31,16 @@ const sendEmail = async ({ to, subject, html }) => {
         res.on("data", (chunk) => { data += chunk; });
         res.on("end", () => {
           if (res.statusCode >= 200 && res.statusCode < 300) {
-            console.log("✅ Email sent via Brevo API →", to);
+            /* Brevo ka messageId — isi se Brevo ke logs mein exact email
+               dhoondhi ja sakti hai. Isse pehle ye phenk diya jaata tha,
+               isliye "Brevo ne liya ya nahi" saabit karna namumkin tha. */
+            let msgId = "";
+            try { msgId = JSON.parse(data).messageId || ""; } catch {}
+
+            console.log(
+              `✅ Email sent via Brevo API → ${to}` +
+              (msgId ? `  [messageId: ${msgId}]` : `  [messageId nahi mila: ${data}]`)
+            );
             resolve(true);
           } else {
             // Brevo ki asli wajah saaf dikhni chahiye — code aur message dono

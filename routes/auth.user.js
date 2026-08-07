@@ -3,7 +3,8 @@ const router  = express.Router();
 
 const User      = require("../models/User");
 const Otp       = require("../models/Otp");
-const sendEmail = require("../utils/sendEmail");
+const sendEmail     = require("../utils/sendEmail");
+const sendEmailSmtp = require("../utils/sendEmailSmtp");
 const otpEmail  = require("../utils/emailTemplates/otpEmail");
 const { signUserToken, USER_TOKEN_DAYS } = require("../utils/userToken");
 const { protectUser } = require("../middleware/userAuth");
@@ -103,11 +104,23 @@ router.post("/send-otp", async (req, res) => {
       ip:        req.headers["x-forwarded-for"] || req.ip || "",
     });
 
-    const sent = await sendEmail({
+    /* OTP ke liye Gmail SMTP PEHLE.
+       Brevo OTP emails ko 201 dekar sweekar karta hai par bhejta nahi —
+       registration mails wahi key se theek jaati hain. Login email par
+       hi tikka hai, isliye pehle SMTP, wo na chale to Brevo. */
+    const mail = {
       to:      email,
-      subject: `${code} is your Valley Run login code`,
+      // Subject ke shuru mein 6-digit code phishing-filters ko chubhta hai
+      subject: "Your Valley Run sign-in code",
       html:    otpEmail({ name: user.name, code, ttlMinutes: OTP_TTL_MIN }),
-    });
+    };
+
+    let sent = await sendEmailSmtp(mail);
+
+    if (!sent) {
+      console.warn(`⚠️  SMTP se nahi gaya, Brevo try kar rahe hain → ${email}`);
+      sent = await sendEmail(mail);
+    }
 
     if (!sent) {
       /* Email gaya hi nahi — to is koshish ki saza user ko kyun?

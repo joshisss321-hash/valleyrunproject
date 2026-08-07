@@ -17,6 +17,16 @@
  *       → Brevo se seedha poochta hai: plan kya hai, kitne email
  *         credits bache hain. Quota khatam hai to yahi batayega.
  *
+ *   node scripts/otpDebug.js you@email.com --smtp
+ *       → Gmail SMTP se asli OTP email bhejta hai (Brevo ko bilkul
+ *         chhue bina). Ye chal gaya to login ki dikkat khatam.
+ *
+ *   node scripts/otpDebug.js you@email.com --test-otp
+ *       → BILKUL WAHI OTP email bhejta hai jo login karta hai (wahi
+ *         subject, wahi template) aur Brevo ka KACCHA jawab dikhata
+ *         hai. Registration mail ja rahi ho par OTP na ja raha ho,
+ *         to iska jawab yahi batayega.
+ *
  *   node scripts/otpDebug.js you@email.com --code
  *       → email ka intezaar kiye bina ek OTP banata hai aur yahin
  *         screen par dikha deta hai. Use login page par daal dijiye.
@@ -43,6 +53,44 @@ const reset = args.includes("--reset");
 const test  = args.includes("--test-email");
 const brevo = args.includes("--brevo");
 const wantCode = args.includes("--code");
+const testOtp  = args.includes("--test-otp");
+const testSmtp = args.includes("--smtp");
+
+/**
+ * Brevo ko seedha wahi payload bhejta hai jo OTP login bhejta hai,
+ * aur Brevo ka jawab jaisa hai waisa dikhata hai — koi chhupav nahi.
+ */
+const rawBrevoSend = ({ to, subject, html }) =>
+  new Promise((resolve) => {
+    const payload = JSON.stringify({
+      sender: { name: "Valley Run", email: process.env.EMAIL_REPLY_TO },
+      to: [{ email: to }],
+      subject,
+      htmlContent: html,
+    });
+
+    const req = https.request(
+      {
+        hostname: "api.brevo.com",
+        path:     "/v3/smtp/email",
+        method:   "POST",
+        headers: {
+          "Content-Type":   "application/json",
+          "api-key":        process.env.BREVO_API_KEY,
+          "Content-Length": Buffer.byteLength(payload),
+        },
+      },
+      (res) => {
+        let body = "";
+        res.on("data", (c) => (body += c));
+        res.on("end", () => resolve({ status: res.statusCode, body }));
+      }
+    );
+    req.on("error", (e) => resolve({ status: 0, body: e.message }));
+    req.setTimeout(30000, () => { req.destroy(); resolve({ status: 0, body: "timeout" }); });
+    req.write(payload);
+    req.end();
+  });
 
 /** Brevo se account info — kitne email credits bache hain */
 const brevoAccount = () =>
@@ -222,6 +270,81 @@ const run = async () => {
         ? "   ✅ Brevo ne accept kar liya. Inbox (aur SPAM folder) dekhiye."
         : "   ❌ Brevo ne MANA kar diya — upar ki error line dekhiye.\n" +
           "      Aam wajah: BREVO_API_KEY galat, ya daily quota (free plan = 300/din) khatam.");
+    }
+
+    /* ── Gmail SMTP se asli OTP email ── */
+    if (testSmtp) {
+      const sendEmailSmtp = require("../utils/sendEmailSmtp");
+
+      if (!sendEmailSmtp.isConfigured()) {
+        console.log("\n❌ EMAIL_USER / EMAIL_PASS .env mein nahi hain.");
+        console.log("   EMAIL_PASS Google App Password hona chahiye.\n");
+      } else {
+        const otpEmail = require("../utils/emailTemplates/otpEmail");
+        const code = generateCode();
+
+        console.log(`\n📤 Gmail SMTP se OTP email bhej rahe hain...`);
+        console.log(`   To   : ${email}`);
+        console.log(`   From : ${process.env.EMAIL_USER}`);
+
+        const ok = await sendEmailSmtp({
+          to: email,
+          subject: "Your Valley Run sign-in code",
+          html: otpEmail({ name: user.name, code, ttlMinutes: OTP_TTL_MIN }),
+        });
+
+        if (ok) {
+          // Bheja hai to DB mein bhi daal do — ye code sach mein chalega
+          await Otp.updateMany({ email, consumed: false }, { consumed: true });
+          await Otp.create({
+            email, codeHash: hashCode(code),
+            expiresAt: new Date(Date.now() + OTP_TTL_MIN * 60 * 1000), ip: "smtp-test",
+          });
+          console.log(`\n✅ Chali gayi! Inbox dekhiye — code ${code} hai.`);
+          console.log(`   Ye code login page par sach mein kaam karega.`);
+        } else {
+          console.log(`\n⛔ SMTP se bhi nahi gayi — upar wali wajah dekhiye.`);
+        }
+      }
+    }
+
+    /* ── Asli OTP email + Brevo ka kaccha jawab ── */
+    if (testOtp) {
+      if (!process.env.BREVO_API_KEY) {
+        console.log("\n❌ BREVO_API_KEY .env mein nahi hai.");
+        console.log("   Render → aapki service → Environment se copy karke");
+        console.log("   local .env mein daal dijiye, phir ye command chalaiye.\n");
+        process.exit(1);
+      }
+
+      const otpEmail = require("../utils/emailTemplates/otpEmail");
+      const code     = generateCode();
+      const subject  = `${code} is your Valley Run login code`;
+
+      console.log(`\n📤 Wahi OTP email bhej rahe hain jo login bhejta hai...`);
+      console.log(`   To      : ${email}`);
+      console.log(`   Subject : ${subject}`);
+      console.log(`   Sender  : ${process.env.EMAIL_REPLY_TO}`);
+
+      const r = await rawBrevoSend({
+        to: email,
+        subject,
+        html: otpEmail({ name: user.name, code, ttlMinutes: OTP_TTL_MIN }),
+      });
+
+      console.log(`\n  ── BREVO KA JAWAB ──────────────────────────`);
+      console.log(`  HTTP ${r.status}`);
+      console.log(`  ${r.body}`);
+      console.log(`  ────────────────────────────────────────────`);
+
+      if (r.status >= 200 && r.status < 300) {
+        console.log(`\n✅ Brevo ne SWEEKAR kar liya (messageId upar hai).`);
+        console.log(`   Ab Brevo → Logs mein isi messageId ko dhoondhiye.`);
+        console.log(`   Wahan na mile to Brevo support ka mamla hai.`);
+        console.log(`   Wahan "Blocked"/"Bounce" dikhe to us address ki dikkat hai.`);
+      } else {
+        console.log(`\n⛔ Brevo ne MANA kar diya — upar wali line hi asli wajah hai.`);
+      }
     }
 
     /* ── Email ke bina OTP — testing ke liye ── */
