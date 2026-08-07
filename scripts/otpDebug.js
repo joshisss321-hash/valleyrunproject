@@ -12,8 +12,18 @@
  *   node scripts/otpDebug.js you@email.com --test-email
  *       → ek asli test email bhejta hai. Aa gaya to Brevo theek hai,
  *         nahi aaya to dikkat Brevo ki taraf hai.
+ *
+ *   node scripts/otpDebug.js --brevo
+ *       → Brevo se seedha poochta hai: plan kya hai, kitne email
+ *         credits bache hain. Quota khatam hai to yahi batayega.
+ *
+ *   node scripts/otpDebug.js you@email.com --code
+ *       → email ka intezaar kiye bina ek OTP banata hai aur yahin
+ *         screen par dikha deta hai. Use login page par daal dijiye.
+ *         Email atki ho tab bhi testing ruk nahi jaati.
  */
 require("dotenv").config({ path: "./.env" });
+const https     = require("https");
 const mongoose  = require("mongoose");
 const Otp       = require("../models/Otp");
 const User      = require("../models/User");
@@ -23,15 +33,99 @@ const {
   MAX_PER_WINDOW,
   WINDOW_MIN,
   OTP_TTL_MIN,
+  generateCode,
+  hashCode,
 } = require("../utils/otp");
 
 const args  = process.argv.slice(2);
 const email = (args.find((a) => !a.startsWith("--")) || "").toLowerCase().trim();
 const reset = args.includes("--reset");
 const test  = args.includes("--test-email");
+const brevo = args.includes("--brevo");
+const wantCode = args.includes("--code");
+
+/** Brevo se account info — kitne email credits bache hain */
+const brevoAccount = () =>
+  new Promise((resolve) => {
+    if (!process.env.BREVO_API_KEY) {
+      return resolve({ error: "BREVO_API_KEY .env mein hai hi nahi" });
+    }
+
+    const req = https.request(
+      {
+        hostname: "api.brevo.com",
+        path:     "/v3/account",
+        method:   "GET",
+        headers:  { "api-key": process.env.BREVO_API_KEY, Accept: "application/json" },
+      },
+      (res) => {
+        let raw = "";
+        res.on("data", (c) => (raw += c));
+        res.on("end", () => {
+          try {
+            const json = JSON.parse(raw);
+            resolve(res.statusCode === 200 ? { data: json } : { error: json.message || raw });
+          } catch {
+            resolve({ error: `Brevo ne ajeeb jawab diya (HTTP ${res.statusCode})` });
+          }
+        });
+      }
+    );
+    req.on("error", (e) => resolve({ error: e.message }));
+    req.setTimeout(15000, () => { req.destroy(); resolve({ error: "Brevo timeout" }); });
+    req.end();
+  });
+
+const showBrevo = async () => {
+  console.log(`\n${"═".repeat(58)}`);
+  console.log("  BREVO ACCOUNT");
+  console.log("═".repeat(58));
+
+  const { data, error } = await brevoAccount();
+
+  if (error) {
+    console.log(`\n❌ ${error}`);
+    console.log("   Iska matlab OTP email ja hi nahi sakti.\n");
+    return;
+  }
+
+  console.log(`\n  Account : ${data.email || "—"}`);
+  console.log(`  Company : ${data.companyName || "—"}`);
+
+  const plans = data.plan || [];
+  let emailCredits = null;
+
+  plans.forEach((p) => {
+    const label = p.type === "free" ? "Free plan" : p.type;
+    if (p.credits !== undefined) {
+      console.log(`  ${label.padEnd(12)}: ${p.credits} credits bache (${p.creditsType || "?"})`);
+      if ((p.creditsType || "").toLowerCase().includes("email")) emailCredits = p.credits;
+    } else {
+      console.log(`  ${label.padEnd(12)}: ${JSON.stringify(p)}`);
+    }
+  });
+
+  if (emailCredits !== null) {
+    if (emailCredits <= 0) {
+      console.log(`\n⛔ EMAIL CREDITS KHATAM. Yahi wajah hai OTP na aane ki.`);
+      console.log(`   Free plan par roz 300 emails milti hain aur aadhi raat ko reset hoti hain.`);
+      console.log(`   Tracking sheet 2-3 baar upload karne se ye jaldi khatam ho jaate hain.`);
+    } else if (emailCredits < 30) {
+      console.log(`\n⚠️  Sirf ${emailCredits} credits bache hain — jald khatam ho jayenge.`);
+    } else {
+      console.log(`\n✅ ${emailCredits} credits bache hain — quota ki dikkat nahi hai.`);
+    }
+  }
+  console.log(`\n${"═".repeat(58)}\n`);
+};
 
 const run = async () => {
   try {
+    if (brevo && !email) {
+      await showBrevo();
+      process.exit(0);
+    }
+
     if (!email) {
       console.log("\nEmail do:\n  node scripts/otpDebug.js you@email.com [--reset] [--test-email]\n");
       process.exit(1);
@@ -130,7 +224,29 @@ const run = async () => {
           "      Aam wajah: BREVO_API_KEY galat, ya daily quota (free plan = 300/din) khatam.");
     }
 
+    /* ── Email ke bina OTP — testing ke liye ── */
+    if (wantCode) {
+      await Otp.updateMany({ email, consumed: false }, { consumed: true });
+
+      const code = generateCode();
+      await Otp.create({
+        email,
+        codeHash:  hashCode(code),
+        expiresAt: new Date(Date.now() + OTP_TTL_MIN * 60 * 1000),
+        ip:        "script",
+      });
+
+      console.log(`\n  ┌──────────────────────┐`);
+      console.log(`  │   OTP:  ${code}     │`);
+      console.log(`  └──────────────────────┘`);
+      console.log(`\n  Ise login page par daal dijiye — ${OTP_TTL_MIN} minute valid hai.`);
+      console.log(`  Koi email nahi jaayegi, isliye Brevo ki dikkat se farak nahi padta.`);
+    }
+
     console.log(`\n${"═".repeat(58)}\n`);
+
+    if (brevo) await showBrevo();
+
     process.exit(0);
   } catch (err) {
     console.error("❌ Error:", err.message);

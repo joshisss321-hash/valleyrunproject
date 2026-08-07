@@ -134,7 +134,10 @@ router.post("/preview", protect, async (req, res) => {
 ═══════════════════════════════════════════════════════════ */
 router.post("/commit", protect, async (req, res) => {
   try {
-    const { eventSlug, rows, notify = true, overwrite = false } = req.body;
+    /* notify DEFAULT ab false hai — sekdon emails bhejna jaan-boojh kar
+       hona chahiye, galti se nahi. Tracking ID to har haal mein save
+       hoti hai aur user ki profile mein turant dikhti hai. */
+    const { eventSlug, rows, notify = false, overwrite = false } = req.body;
 
     if (!eventSlug || !Array.isArray(rows) || rows.length === 0) {
       return res.status(400).json({ success: false, message: "eventSlug and rows are both required" });
