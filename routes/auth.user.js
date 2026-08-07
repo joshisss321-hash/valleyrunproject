@@ -110,17 +110,25 @@ router.post("/send-otp", async (req, res) => {
        hi tikka hai, isliye pehle SMTP, wo na chale to Brevo. */
     const mail = {
       to:      email,
-      // Subject ke shuru mein 6-digit code phishing-filters ko chubhta hai
-      subject: "Your Valley Run sign-in code",
+      /* Bilkul wahi subject jo Brevo par saabit tor par kaam karta tha —
+         12:09 wali email is format se Sent → Delivered → Opened → Clicked
+         tak gayi thi. English conversion mein ise badla tha, wahi galti thi. */
+      subject: `${code} — Valley Run login code`,
       html:    otpEmail({ name: user.name, code, ttlMinutes: OTP_TTL_MIN }),
     };
 
-    let sent = await sendEmailSmtp(mail);
+    /* ⚠️ Render outbound SMTP ports (25/465/587) block karta hai — wahan
+       ye hamesha "Connection timeout" deta hai. Isliye SMTP default OFF;
+       .env mein USE_SMTP_FOR_OTP=true karne par hi try hota hai (kisi
+       aise host par jahan SMTP khula ho). */
+    let sent = false;
 
-    if (!sent) {
-      console.warn(`⚠️  SMTP se nahi gaya, Brevo try kar rahe hain → ${email}`);
-      sent = await sendEmail(mail);
+    if (process.env.USE_SMTP_FOR_OTP === "true") {
+      sent = await sendEmailSmtp(mail);
+      if (!sent) console.warn(`⚠️  SMTP se nahi gaya, Brevo try kar rahe hain → ${email}`);
     }
+
+    if (!sent) sent = await sendEmail(mail);
 
     if (!sent) {
       /* Email gaya hi nahi — to is koshish ki saza user ko kyun?
