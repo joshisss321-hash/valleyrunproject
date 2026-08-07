@@ -21,6 +21,12 @@ const leaderboardRoutes  = require("./routes/leaderboard.routes"); // ✅ NEW
 const adminReviews  = require("./routes/admin.reviews");
 const publicReviews = require("./routes/reviews.public");
 
+/* ── 🆕 USER PROFILE STACK ── */
+const authUserRoutes  = require("./routes/auth.user");       // email OTP login
+const profileRoutes   = require("./routes/profile.routes");  // dashboard + stats + coach
+const couponRoutes    = require("./routes/coupon.routes");   // checkout coupon/referral
+const adminTracking   = require("./routes/admin.tracking");  // bulk tracking-ID upload
+
 const app = express();
 
 /* ── CORS ── */
@@ -57,10 +63,16 @@ app.use("/api",             runRoutes);
 app.use("/api",             medalReviewRoutes);
 app.use("/api", publicReviews);
 
+/* ── 🆕 USER (runner) AUTH + PROFILE ── */
+app.use("/api/auth",    authUserRoutes);
+app.use("/api/profile", profileRoutes);
+app.use("/api/coupon",  couponRoutes);
+
 /* ── ADMIN ── */
 app.use("/api/admin/events",         adminEvents);
 app.use("/api/admin/submissions",    adminSubmissions);
 app.use("/api/admin/registrations",  adminRegistrations);
+app.use("/api/admin/tracking",       adminTracking);
 app.use("/api/admin",                adminStats);
 app.use("/api/admin/users",          adminUsers);
 app.use("/api/admin/leaderboard",    adminLeaderboard);

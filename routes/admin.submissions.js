@@ -49,6 +49,56 @@ router.get("/", protect, async (req, res) => {
   }
 });
 
+/* GET /api/admin/submissions/export?eventSlug=&status=&distance=&search=
+   Excel download ke liye — list endpoint jaisa hi filter, par
+   pagination NAHI. Screen par bhale 100 dikhein, sheet mein poore
+   records aate hain. */
+router.get("/export", protect, async (req, res) => {
+  try {
+    const { eventSlug, status, distance, search } = req.query;
+
+    const filter = {};
+    if (eventSlug) filter.eventSlug = eventSlug;
+    if (status)    filter.status    = status;
+    if (distance)  filter.distance  = distance;
+    if (search) {
+      filter.$or = [
+        { name:  { $regex: search, $options: "i" } },
+        { email: { $regex: search, $options: "i" } },
+        { phone: { $regex: search, $options: "i" } },
+      ];
+    }
+
+    const subs = await RunSubmission.find(filter).sort({ createdAt: 1 }).lean();
+
+    const rows = subs.map((s, i) => ({
+      sr:        i + 1,
+      name:      s.name      || "",
+      email:     s.email     || "",
+      phone:     s.phone     || "",
+      eventSlug: s.eventSlug || "",
+      distance:  s.distance  || "",
+      timing:    s.timing    || "",
+      status:    s.status    || "",
+      adminNote: s.adminNote || "",
+      imageUrl:  s.imageUrl  || "",
+      date: s.createdAt
+        ? new Date(s.createdAt).toLocaleDateString("en-IN")
+        : "",
+    }));
+
+    res.json({
+      success: true,
+      event:   eventSlug || "all-events",
+      total:   rows.length,
+      rows,
+    });
+  } catch (err) {
+    console.error("submissions export error:", err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 // PUT /api/admin/submissions/:id/approve
 router.put("/:id/approve", protect, async (req, res) => {
   try {

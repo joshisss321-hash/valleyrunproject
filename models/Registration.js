@@ -20,6 +20,13 @@ const registrationSchema = new mongoose.Schema(
     status:    { type: String, default: "paid" },
     amount:    { type: Number, default: 0 },
 
+    // ── 🎽 BIB NUMBER ────────────────────────────────────────
+    bibNumber: { type: String, default: "" },
+
+    // ── 🎟️ COUPON / REFERRAL ─────────────────────────────────
+    couponCode:     { type: String, default: "" },
+    discountAmount: { type: Number, default: 0 },
+
     // Medal dispatch tracking
     medalStatus: {
       type: String,
@@ -27,6 +34,25 @@ const registrationSchema = new mongoose.Schema(
       default: "pending",
     },
     trackingId: { type: String, default: "" },
+
+    // ── 📦 COURIER DETAILS (Amazon-style tracking ke liye) ───
+    courier:      { type: String, default: "" }, // "delhivery", "bluedart", ...
+    trackingUrl:  { type: String, default: "" },
+    dispatchedAt: { type: Date,   default: null },
+    deliveredAt:  { type: Date,   default: null },
+
+    // Har status change ka record — profile timeline yahi se banta hai
+    statusHistory: {
+      type: [
+        {
+          _id:    false,
+          status: { type: String },
+          note:   { type: String, default: "" },
+          at:     { type: Date, default: Date.now },
+        },
+      ],
+      default: [],
+    },
   },
   { timestamps: true }
 );
@@ -34,5 +60,7 @@ const registrationSchema = new mongoose.Schema(
 // Prevent duplicate registration
 registrationSchema.index({ user: 1, event: 1 }, { unique: true });
 registrationSchema.index({ eventSlug: 1 });
+registrationSchema.index({ bibNumber: 1 });
+registrationSchema.index({ medalStatus: 1 });
 
 module.exports = mongoose.model("Registration", registrationSchema);

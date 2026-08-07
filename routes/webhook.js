@@ -5,6 +5,8 @@ const Registration = require("../models/Registration");
 const User         = require("../models/User");
 const Event        = require("../models/Event");
 const sendEmail    = require("../utils/sendEmail");
+const { decodePromo } = require("../utils/referral");
+const { completeRegistration } = require("../utils/completeRegistration");
 
 router.post(
   "/webhook",
@@ -96,20 +98,21 @@ router.post(
           await user.save();
         }
 
-        // ✅ Save registration
-        await Registration.create({
-          user:        user._id,
-          event:       ev._id,
-          eventSlug:   notes.eventSlug,
-          category:    notes.category  || "General",
-          paymentId:   payment.id,
-          orderId:     payment.order_id || "",
-          amount:      ev.price        || 0,
-          status:      "paid",
-          medalStatus: "pending",
-        });
+        // ✅ Save registration — verify-payment ke saath shared helper,
+        //    taaki BIB / coupon / referral dono raaston par ek jaisa chale
+        const promo = decodePromo(notes.promo);
 
-        console.log(`✅ Webhook saved: ${notes.email} | ${notes.eventSlug}`);
+        await completeRegistration({
+          user,
+          event:          ev,
+          paymentId:      payment.id,
+          orderId:        payment.order_id || "",
+          category:       notes.category   || "General",
+          amountPaid:     Math.max(0, (Number(ev.price) || 0) - promo.discountAmount),
+          couponCode:     promo.couponCode,
+          discountAmount: promo.discountAmount,
+          referrerId:     promo.referrerId,
+        });
 
         // ✅ Email bhejo — same as verify-payment
         const name        = notes.name     || "Runner";

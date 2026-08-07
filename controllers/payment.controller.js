@@ -4,6 +4,8 @@ const Registration = require("../models/Registration");
 const Event = require("../models/Event");
 const User = require("../models/User");
 const sendEmail = require("../utils/sendEmail");
+const { resolveDiscount, encodePromo, decodePromo } = require("../utils/referral");
+const { completeRegistration } = require("../utils/completeRegistration");
 
 const razorpay = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID,
@@ -23,20 +25,69 @@ const createOrder = async (req, res) => {
       address1, address2, landmark,
       city, state, pincode,
       category, source,
+      couponCode,
     } = req.body;
 
-    if (!amount) {
+    /* 🔒 Price SERVER se aati hai.
+       Pehle client ka bheja hua `amount` seedha Razorpay ko jaata tha —
+       yaani koi bhi ₹1 ka order bana sakta tha. Ab Event.price hi
+       authority hai; client amount sirf tab use hota hai jab event
+       na mile (aur us case mein registration waise bhi nahi banti). */
+    const event = eventSlug ? await Event.findOne({ slug: eventSlug }) : null;
+
+    const serverPrice = Number(event?.price) || 0;
+    const clientPrice = Number(amount)       || 0;
+
+    // Event ki price set ho to wahi chalti hai. Agar kisi purane event ka
+    // price 0/missing ho to purane behaviour par gir jaate hain (client amount)
+    // — warna us event ki registration hi band ho jaati.
+    let originalAmount = serverPrice > 0 ? serverPrice : clientPrice;
+
+    if (serverPrice > 0 && clientPrice > 0 && serverPrice !== clientPrice) {
+      console.warn(
+        `⚠️ Price mismatch for ${eventSlug}: client bheja ₹${clientPrice}, server ₹${serverPrice}. Server wali li gayi.`
+      );
+    }
+
+    if (!originalAmount || originalAmount < 1) {
       return res.status(400).json({
         success: false,
         message: "Amount missing",
       });
     }
 
+    /* ── Coupon / referral ── */
+    let payable       = originalAmount;
+    let appliedCoupon = "";
+    let discount      = 0;
+    let referrerId    = "";
+
+    if (couponCode && String(couponCode).trim()) {
+      const result = await resolveDiscount({
+        code:   couponCode,
+        email,
+        amount: originalAmount,
+        eventSlug,
+      });
+
+      if (!result.ok) {
+        return res.status(400).json({ success: false, message: result.message });
+      }
+
+      discount      = result.discount;
+      appliedCoupon = result.couponCode;
+      referrerId    = result.referrerId ? String(result.referrerId) : "";
+      payable       = originalAmount - discount;
+    }
+
     const order = await razorpay.orders.create({
-      amount:   amount * 100,
+      // Razorpay poore paise (integer) maangta hai
+      amount:   Math.round(payable * 100),
       currency: "INR",
       receipt:  `receipt_${Date.now()}`,
-      // ✅ NOTES — webhook yahan se data uthayega agar user back press kare
+      // ✅ NOTES — webhook yahan se data uthayega agar user back press kare.
+      //    Razorpay max 15 notes deta hai, isliye coupon ki teeno cheezein
+      //    `promo` mein pack ki hui hain.
       notes: {
         eventSlug: eventSlug || "",
         name:      name      || "",
@@ -50,10 +101,18 @@ const createOrder = async (req, res) => {
         pincode:   pincode   || "",
         category:  category  || "General",
         source:    source    || "",
+        promo:     encodePromo({ couponCode: appliedCoupon, discount, referrerId }),
       },
     });
 
-    return res.json({ success: true, order });
+    return res.json({
+      success: true,
+      order,
+      originalAmount,
+      discount,
+      payable,
+      couponApplied: appliedCoupon,
+    });
 
   } catch (err) {
     console.error("Create Order Error:", err);
@@ -140,31 +199,57 @@ const verifyPayment = async (req, res) => {
       await user.save();
     }
 
-    // ✅ Save registration
-    const existing = await Registration.findOne({
-      user:  user._id,
-      event: event._id,
-    });
+    /* ── Coupon / referral info Razorpay order ke notes se ──
+       Client par bharosa nahi — jo order banate waqt tay hua tha
+       wahi authority hai (webhook bhi yahi padhta hai). */
+    let promo = { couponCode: "", discountAmount: 0, referrerId: null };
 
-    if (!existing) {
-      await Registration.create({
-        user:        user._id,
-        event:       event._id,
-        eventSlug:   eventSlug,
-        category:    safeCategory,
-        paymentId:   razorpay_payment_id,
-        orderId:     razorpay_order_id,
-        amount:      event.price || 0,
-        status:      "paid",
-        medalStatus: "pending",
-      });
-      console.log("✅ Registration saved:", email, eventSlug);
-    } else {
-      console.log("⚠️ Already registered:", email);
+    // ⚡ Coupon lagaya hi nahi to Razorpay ko call karne ki zaroorat nahi —
+    //    zyadatar payments bina extra network hop ke nikal jaate hain.
+    if (req.body.couponCode && String(req.body.couponCode).trim()) {
+      try {
+        const rzpOrder = await razorpay.orders.fetch(razorpay_order_id);
+        promo = decodePromo(rzpOrder?.notes?.promo);
+      } catch (err) {
+        console.error("⚠️ Order notes fetch fail:", err.message);
+
+        // Fallback: client ka bheja code server-side dobara resolve karo
+        const result = await resolveDiscount({
+          code:   req.body.couponCode,
+          email,
+          amount: Number(event.price) || 0,
+          eventSlug,
+        });
+        if (result.ok) {
+          promo = {
+            couponCode:     result.couponCode,
+            discountAmount: result.discount,
+            referrerId:     result.referrerId || null,
+          };
+        }
+      }
     }
 
+    const amountPaid = Math.max(0, (Number(event.price) || 0) - promo.discountAmount);
+
+    const { registration } = await completeRegistration({
+      user,
+      event,
+      paymentId:      razorpay_payment_id,
+      orderId:        razorpay_order_id,
+      category:       safeCategory,
+      amountPaid,
+      couponCode:     promo.couponCode,
+      discountAmount: promo.discountAmount,
+      referrerId:     promo.referrerId,
+    });
+
     // ✅ Response turant bhejo
-    res.json({ success: true, message: "Payment verified successfully" });
+    res.json({
+      success:   true,
+      message:   "Payment verified successfully",
+      bibNumber: registration?.bibNumber || "",
+    });
 
     // ✅ Email background mein
     sendEmail({
