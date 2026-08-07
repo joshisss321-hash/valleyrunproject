@@ -24,7 +24,7 @@ const SITE_URL = process.env.SITE_URL || "https://valleyrun.in";
 /** Rows ko event ki registrations se match karta hai. */
 const matchRows = async (eventSlug, rows) => {
   const event = await Event.findOne({ slug: eventSlug });
-  if (!event) return { error: "Event nahi mila" };
+  if (!event) return { error: "Event not found" };
 
   const registrations = await Registration.find({ event: event._id })
     .populate("user", "name email phone")
@@ -53,20 +53,20 @@ const matchRows = async (eventSlug, rows) => {
         rowNo,
         phone: row.phone || "",
         trackingId,
-        reason: !phone ? "Phone missing/galat" : "Tracking ID missing",
+        reason: !phone ? "Phone missing or invalid" : "Tracking ID missing",
       });
       return;
     }
 
     if (seen.has(phone)) {
-      invalid.push({ rowNo, phone, trackingId, reason: "Sheet mein duplicate phone" });
+      invalid.push({ rowNo, phone, trackingId, reason: "Duplicate phone in sheet" });
       return;
     }
     seen.add(phone);
 
     const reg = byPhone.get(phone);
     if (!reg) {
-      notFound.push({ rowNo, phone, trackingId, reason: "Is event mein registration nahi mili" });
+      notFound.push({ rowNo, phone, trackingId, reason: "No registration found for this event" });
       return;
     }
 
@@ -98,7 +98,7 @@ router.post("/preview", protect, async (req, res) => {
     const { eventSlug, rows } = req.body;
 
     if (!eventSlug || !Array.isArray(rows) || rows.length === 0) {
-      return res.status(400).json({ success: false, message: "eventSlug aur rows dono chahiye" });
+      return res.status(400).json({ success: false, message: "eventSlug and rows are both required" });
     }
 
     const result = await matchRows(eventSlug, rows);
@@ -137,7 +137,7 @@ router.post("/commit", protect, async (req, res) => {
     const { eventSlug, rows, notify = true, overwrite = false } = req.body;
 
     if (!eventSlug || !Array.isArray(rows) || rows.length === 0) {
-      return res.status(400).json({ success: false, message: "eventSlug aur rows dono chahiye" });
+      return res.status(400).json({ success: false, message: "eventSlug and rows are both required" });
     }
 
     const result = await matchRows(eventSlug, rows);
@@ -185,7 +185,7 @@ router.post("/commit", protect, async (req, res) => {
     // ✅ Response pehle bhejo — emails background mein
     res.json({
       success: true,
-      message: `${updated} medal dispatched mark ho gaye`,
+      message: `${updated} medals marked as dispatched`,
       updated,
       skipped,
       notFound: result.notFound.length,
@@ -199,7 +199,7 @@ router.post("/commit", protect, async (req, res) => {
         try {
           await sendEmail({
             to:      row.email,
-            subject: `📦 Aapka medal dispatch ho gaya – ${result.event.title}`,
+            subject: `📦 Your medal has been dispatched – ${result.event.title}`,
             html: dispatchedEmail({
               name:        row.name,
               eventTitle:  result.event.title,

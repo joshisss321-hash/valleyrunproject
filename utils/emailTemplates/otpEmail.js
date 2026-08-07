@@ -36,18 +36,18 @@ module.exports = ({ name = "Runner", code, ttlMinutes = 10 }) => `
     <div class="body">
       <div class="greeting">Hello ${name},</div>
       <p class="message">
-        Apne Valley Run profile mein login karne ke liye ye code daaliye:
+        Use the code below to sign in to your Valley Run profile:
       </p>
 
       <div class="code-box">
         <div class="code">${code}</div>
-        <div class="code-note">Ye code ${ttlMinutes} minute mein expire ho jayega</div>
+        <div class="code-note">This code expires in ${ttlMinutes} minutes</div>
       </div>
 
       <div class="warn">
-        Agar aapne login request nahi ki, to is mail ko ignore kar dijiye —
-        aapka account bilkul surakshit hai. Ye code kisi ke saath share na karein.
-        Valley Run team kabhi aapse OTP nahi maangti.
+        If you did not request this code, you can safely ignore this email —
+        your account is secure. Never share this code with anyone. The Valley Run
+        team will never ask you for it.
       </div>
     </div>
 

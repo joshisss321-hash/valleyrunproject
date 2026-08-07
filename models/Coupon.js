@@ -86,27 +86,27 @@ couponSchema.index({ ownerEmail: 1, active: 1 });
  */
 couponSchema.methods.checkUsable = function ({ email, amount, eventSlug } = {}) {
   if (!this.active) {
-    return { ok: false, message: "Ye coupon ab active nahi hai" };
+    return { ok: false, message: "This coupon is no longer active" };
   }
 
   if (this.expiresAt && this.expiresAt < new Date()) {
-    return { ok: false, message: "Coupon expire ho chuka hai" };
+    return { ok: false, message: "This coupon has expired" };
   }
 
   if (this.usedCount >= this.maxUses) {
-    return { ok: false, message: "Coupon ki usage limit khatam ho gayi" };
+    return { ok: false, message: "This coupon has reached its usage limit" };
   }
 
   if (this.ownerEmail && email && this.ownerEmail !== String(email).toLowerCase()) {
-    return { ok: false, message: "Ye coupon aapke account ke liye nahi hai" };
+    return { ok: false, message: "This coupon belongs to a different account" };
   }
 
   if (this.eventSlug && eventSlug && this.eventSlug !== eventSlug) {
-    return { ok: false, message: "Ye coupon is event pe valid nahi hai" };
+    return { ok: false, message: "This coupon is not valid for this event" };
   }
 
   if (amount != null && this.minAmount > 0 && amount < this.minAmount) {
-    return { ok: false, message: `Ye coupon ₹${this.minAmount} se upar hi lagta hai` };
+    return { ok: false, message: `This coupon applies on orders above ₹${this.minAmount}` };
   }
 
   return { ok: true };

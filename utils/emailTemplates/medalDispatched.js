@@ -38,15 +38,15 @@ module.exports = ({
 <body>
   <div class="container">
     <div class="header">
-      <h1>📦 Aapka Medal Dispatch Ho Gaya!</h1>
+      <h1>📦 Your Medal Is On Its Way!</h1>
       <p>${eventTitle}</p>
     </div>
 
     <div class="body">
       <div class="greeting">Hello ${name},</div>
       <p class="message">
-        Badhai ho! Aapki mehnat ka medal bann kar raasta pakad chuka hai 🏅<br>
-        Neeche tracking details hain:
+        Congratulations! The medal you earned has been shipped 🏅<br>
+        Here are your tracking details:
       </p>
 
       <div class="track-box">
@@ -75,8 +75,8 @@ module.exports = ({
       </div>
 
       <p class="message">
-        Delivery mein aam taur par 5-10 din lagte hain. Koi dikkat ho to
-        is mail ka reply kar dijiye.<br><br>
+        Delivery usually takes 5-10 days. If anything looks wrong, just reply
+        to this email and we will sort it out.<br><br>
         <strong>Team Valley Run</strong>
       </p>
     </div>

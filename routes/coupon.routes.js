@@ -17,12 +17,12 @@ router.post("/validate", async (req, res) => {
     const { code, eventSlug, email } = req.body;
 
     if (!code || !String(code).trim()) {
-      return res.status(400).json({ success: false, message: "Coupon code daaliye" });
+      return res.status(400).json({ success: false, message: "Please enter a coupon code" });
     }
 
     const event = await Event.findOne({ slug: eventSlug });
     if (!event) {
-      return res.status(404).json({ success: false, message: "Event nahi mila" });
+      return res.status(404).json({ success: false, message: "Event not found" });
     }
 
     const amount = Number(event.price) || 0;
@@ -49,7 +49,7 @@ router.post("/validate", async (req, res) => {
     });
   } catch (err) {
     console.error("coupon validate error:", err);
-    res.status(500).json({ success: false, message: "Coupon check nahi ho paya" });
+    res.status(500).json({ success: false, message: "We could not check that coupon" });
   }
 });
 

@@ -3,11 +3,14 @@ const User    = require("../models/User");
 const Coupon  = require("../models/Coupon");
 const sendEmail = require("./sendEmail");
 
-/* ── RULES (ek jagah, taaki badalna aasan rahe) ────────────── */
-const WELCOME_PERCENT      = 5;  // friend ko turant
-const REWARD_PERCENT       = 6;  // referrer ko
-const REFERRALS_PER_REWARD = 3;  // itne paid referrals pe ek reward
-const REWARD_VALID_DAYS    = 180;
+/* ── RULES (ek jagah, taaki badalna aasan rahe) ──────────────
+   Referrer: har paid referral pe 2% judta hai, max 20% tak.
+   Jo join karta hai: hamesha 1% instant.
+   Coupon use hote hi referrer ka counter zero se shuru.        */
+const WELCOME_PERCENT       = 2;   // naye bande ko turant
+const REWARD_PER_REFERRAL   = 2;   // referrer ko har referral pe
+const REWARD_MAX_PERCENT    = 20;  // isse upar nahi badhega
+const REWARD_VALID_DAYS     = 180;
 
 /* Confusing characters (0/O, 1/I/L) hata diye — log code type karte hain */
 const ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -62,7 +65,7 @@ const ensureReferralCode = async (user) => {
  */
 const resolveDiscount = async ({ code, email, amount, eventSlug }) => {
   const clean = String(code || "").trim().toUpperCase();
-  if (!clean) return { ok: false, message: "Code daaliye" };
+  if (!clean) return { ok: false, message: "Please enter a code" };
 
   const base       = Number(amount) || 0;
   const buyerEmail = String(email || "").toLowerCase().trim();
@@ -76,7 +79,7 @@ const resolveDiscount = async ({ code, email, amount, eventSlug }) => {
 
     const discount = coupon.calcDiscount(base);
     if (discount <= 0) {
-      return { ok: false, message: "Is amount pe discount lagu nahi hota" };
+      return { ok: false, message: "This discount does not apply to this amount" };
     }
 
     return {
@@ -87,25 +90,25 @@ const resolveDiscount = async ({ code, email, amount, eventSlug }) => {
       coupon,
       message:
         coupon.discountType === "percent"
-          ? `${coupon.value}% off applied — ₹${discount} bachaye!`
+          ? `${coupon.value}% off applied — you saved ₹${discount}!`
           : `₹${discount} off applied!`,
     };
   }
 
   /* ── 2. Ab referral code check karo ────────────────────── */
   const referrer = await User.findOne({ referralCode: clean });
-  if (!referrer) return { ok: false, message: "Ye code valid nahi hai" };
+  if (!referrer) return { ok: false, message: "This code is not valid" };
 
   // Apne hi code se discount nahi
   if (buyerEmail && referrer.email === buyerEmail) {
-    return { ok: false, message: "Apna hi referral code use nahi kar sakte 🙂" };
+    return { ok: false, message: "You cannot use your own referral code 🙂" };
   }
 
   // Ek user zindagi mein ek hi baar referral discount le sakta hai
   if (buyerEmail) {
     const existing = await User.findOne({ email: buyerEmail });
     if (existing?.referredBy) {
-      return { ok: false, message: "Aap pehle hi ek referral code use kar chuke hain" };
+      return { ok: false, message: "You have already used a referral code" };
     }
   }
 
@@ -115,7 +118,7 @@ const resolveDiscount = async ({ code, email, amount, eventSlug }) => {
   );
 
   if (discount <= 0) {
-    return { ok: false, message: "Is amount pe discount lagu nahi hota" };
+    return { ok: false, message: "This discount does not apply to this amount" };
   }
 
   return {
@@ -124,14 +127,18 @@ const resolveDiscount = async ({ code, email, amount, eventSlug }) => {
     couponCode: clean,
     kind:       "referral",
     referrerId: referrer._id,
-    message: `${WELCOME_PERCENT}% off — ${referrer.name?.split(" ")[0] || "aapke friend"} ke referral se ₹${discount} bache! 🎉`,
+    message: `${WELCOME_PERCENT}% off — ${referrer.name?.split(" ")[0] || "your friend"}’s referral saved you ₹${discount}! 🎉`,
   };
 };
 
 /**
  * Payment successful hone ke baad call hota hai.
- * Referrer ka count badhata hai aur har 3 referrals pe 6% ka coupon deta hai.
- * Ye kabhi throw nahi karta — registration payment flow isse rukna nahi chahiye.
+ *
+ * Referrer ka ek hi reward coupon hota hai jo har referral pe 2% badhta
+ * jaata hai (max 20%). Jab wo coupon use ho jaata hai, agla referral
+ * naya coupon 2% se shuru karta hai.
+ *
+ * Ye kabhi throw nahi karta — payment flow isse rukna nahi chahiye.
  */
 const creditReferral = async ({ referrerId, refereeEmail, refereeName }) => {
   try {
@@ -145,51 +152,74 @@ const creditReferral = async ({ referrerId, refereeEmail, refereeName }) => {
     );
     if (!referrer) return;
 
-    const earned    = Math.floor(referrer.referralCount / REFERRALS_PER_REWARD);
-    const pending   = earned - (referrer.referralRewardsIssued || 0);
+    // Abhi jo coupon chal raha hai (bana hua, expire nahi, use nahi hua)
+    const active = await Coupon.findOne({
+      owner:  referrer._id,
+      kind:   "referral_reward",
+      active: true,
+      $expr:  { $lt: ["$usedCount", "$maxUses"] },
+      $or: [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }],
+    }).sort({ createdAt: -1 });
 
-    console.log(
-      `🎁 Referral credited: ${referrer.email} → ${referrer.referralCount} total, ${pending} reward(s) due`
-    );
+    const expiresAt = new Date(Date.now() + REWARD_VALID_DAYS * 24 * 60 * 60 * 1000);
+    let code, percent;
 
-    for (let i = 0; i < pending; i++) {
-      const rewardCode = `VR${randomChunk(7)}`;
+    if (active) {
+      // Pehle se coupon hai → 2% aur badha do (cap tak)
+      percent = Math.min(active.value + REWARD_PER_REFERRAL, REWARD_MAX_PERCENT);
+      code    = active.code;
+
+      if (percent !== active.value) {
+        active.value     = percent;
+        active.expiresAt = expiresAt; // har referral pe validity refresh
+        active.note      = `Auto-reward: ${percent / REWARD_PER_REFERRAL} referrals`;
+        await active.save();
+      } else {
+        console.log(`🎁 ${referrer.email} cap (${REWARD_MAX_PERCENT}%) par pahunch chuka hai`);
+        return; // cap par hai — email bhi nahi bhejna
+      }
+    } else {
+      // Koi active coupon nahi → naya 2% se shuru
+      percent = REWARD_PER_REFERRAL;
+      code    = `VR${randomChunk(7)}`;
 
       await Coupon.create({
-        code:         rewardCode,
+        code,
         kind:         "referral_reward",
         discountType: "percent",
-        value:        REWARD_PERCENT,
+        value:        percent,
         owner:        referrer._id,
         ownerEmail:   referrer.email,
         maxUses:      1,
-        expiresAt:    new Date(Date.now() + REWARD_VALID_DAYS * 24 * 60 * 60 * 1000),
-        note:         `Auto-reward: ${REFERRALS_PER_REWARD} successful referrals`,
+        expiresAt,
+        note:         "Auto-reward: 1 referral",
       });
 
-      await User.updateOne(
-        { _id: referrer._id },
-        { $inc: { referralRewardsIssued: 1 } }
-      );
-
-      sendEmail({
-        to:      referrer.email,
-        subject: `🎁 Aapne ${REWARD_PERCENT}% discount unlock kar liya!`,
-        html: referralRewardEmail({
-          name: referrer.name,
-          code: rewardCode,
-          percent: REWARD_PERCENT,
-          total: referrer.referralCount,
-        }),
-      }).catch((e) => console.error("❌ Referral reward email failed:", e.message));
+      await User.updateOne({ _id: referrer._id }, { $inc: { referralRewardsIssued: 1 } });
     }
+
+    console.log(
+      `🎁 Referral credited: ${referrer.email} → ${referrer.referralCount} total, coupon ${code} ab ${percent}%`
+    );
+
+    sendEmail({
+      to:      referrer.email,
+      subject: `🎁 Your discount is now ${percent}%`,
+      html: referralRewardEmail({
+        name:    referrer.name,
+        code,
+        percent,
+        total:   referrer.referralCount,
+        maxed:   percent >= REWARD_MAX_PERCENT,
+      }),
+    }).catch((e) => console.error("❌ Referral reward email failed:", e.message));
   } catch (err) {
     console.error("❌ creditReferral error:", err.message);
   }
 };
 
-/* Reward mila — email */
-const referralRewardEmail = ({ name, code, percent, total }) => `
+/* Reward mila / badha — email */
+const referralRewardEmail = ({ name, code, percent, total, maxed }) => `
 <!DOCTYPE html>
 <html><head><meta charset="UTF-8">
 <style>
@@ -205,16 +235,19 @@ const referralRewardEmail = ({ name, code, percent, total }) => `
 </style></head>
 <body>
   <div class="container">
-    <div class="header"><h1>🎁 ${percent}% Discount Unlocked!</h1></div>
+    <div class="header"><h1>🎁 Your discount is now ${percent}%</h1></div>
     <div class="body">
       <p><strong>Hello ${name || "Runner"},</strong></p>
-      <p>Aapke referral code se ab tak <strong>${total} log</strong> Valley Run join kar chuke hain.
-      Iske liye ye raha aapka <strong>${percent}% discount coupon</strong>:</p>
+      <p><strong>${total} ${total === 1 ? "person has" : "people have"}</strong> joined Valley Run with your
+      referral code. Your coupon is now worth <strong>${percent}% off</strong>:</p>
       <div class="code-box">
         <div class="code">${code}</div>
       </div>
-      <p>Ise apni agli registration ke checkout pe apply kijiye. Aur log refer karte rahiye —
-      har 3 referrals pe naya coupon milta rahega! 🏃</p>
+      <p>${
+        maxed
+          ? "This is the maximum discount — it will not grow any further. Apply it at checkout on your next registration!"
+          : "Every new referral adds another 2%. The more you refer, the more you save — hold on to it and let it grow! 🏃"
+      }</p>
       <p><strong>Team Valley Run</strong></p>
     </div>
     <div class="footer">
@@ -267,6 +300,6 @@ module.exports = {
   encodePromo,
   decodePromo,
   WELCOME_PERCENT,
-  REWARD_PERCENT,
-  REFERRALS_PER_REWARD,
+  REWARD_PER_REFERRAL,
+  REWARD_MAX_PERCENT,
 };

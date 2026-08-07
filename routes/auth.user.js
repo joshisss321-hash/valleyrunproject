@@ -46,7 +46,7 @@ router.post("/send-otp", async (req, res) => {
     const email = String(req.body.email || "").toLowerCase().trim();
 
     if (!isValidEmail(email)) {
-      return res.status(400).json({ success: false, message: "Sahi email address daaliye" });
+      return res.status(400).json({ success: false, message: "Please enter a valid email address" });
     }
 
     // Sirf registered runners hi login kar sakte hain
@@ -55,7 +55,7 @@ router.post("/send-otp", async (req, res) => {
       return res.status(404).json({
         success: false,
         code: "NOT_REGISTERED",
-        message: "Is email se koi registration nahi mili. Pehle kisi event mein register karein.",
+        message: "We could not find a registration for this email. Please register for an event first.",
       });
     }
 
@@ -66,7 +66,7 @@ router.post("/send-otp", async (req, res) => {
       if (elapsed < RESEND_COOLDOWN_SEC) {
         return res.status(429).json({
           success: false,
-          message: `Thoda rukiye — ${Math.ceil(RESEND_COOLDOWN_SEC - elapsed)} second baad dobara try karein`,
+          message: `Please wait ${Math.ceil(RESEND_COOLDOWN_SEC - elapsed)} seconds before requesting another code`,
           retryAfter: Math.ceil(RESEND_COOLDOWN_SEC - elapsed),
         });
       }
@@ -78,7 +78,7 @@ router.post("/send-otp", async (req, res) => {
     if (recentCount >= MAX_PER_WINDOW) {
       return res.status(429).json({
         success: false,
-        message: `Bahut zyada requests. ${WINDOW_MIN} minute baad try karein.`,
+        message: `Too many requests. Please try again in ${WINDOW_MIN} minutes.`,
       });
     }
 
@@ -93,20 +93,20 @@ router.post("/send-otp", async (req, res) => {
 
     const sent = await sendEmail({
       to:      email,
-      subject: `${code} — Valley Run login code`,
+      subject: `${code} is your Valley Run login code`,
       html:    otpEmail({ name: user.name, code, ttlMinutes: OTP_TTL_MIN }),
     });
 
     if (!sent) {
       return res.status(502).json({
         success: false,
-        message: "Email bhejne mein dikkat aayi. Thodi der baad try karein.",
+        message: "We could not send the email. Please try again shortly.",
       });
     }
 
     res.json({
       success:      true,
-      message:      `OTP ${email} pe bhej diya gaya hai`,
+      message:      `Verification code sent to ${email}`,
       expiresInMin: OTP_TTL_MIN,
     });
   } catch (err) {
@@ -125,7 +125,7 @@ router.post("/verify-otp", async (req, res) => {
     const code  = String(req.body.code  || "").trim();
 
     if (!isValidEmail(email) || !code) {
-      return res.status(400).json({ success: false, message: "Email aur OTP dono chahiye" });
+      return res.status(400).json({ success: false, message: "Email and verification code are both required" });
     }
 
     const otp = await Otp.findOne({
@@ -137,14 +137,14 @@ router.post("/verify-otp", async (req, res) => {
     if (!otp) {
       return res.status(400).json({
         success: false,
-        message: "OTP expire ho gaya ya mila nahi. Naya OTP mangwaiye.",
+        message: "That code has expired or was not found. Please request a new one.",
       });
     }
 
     if (otp.attempts >= MAX_ATTEMPTS) {
       return res.status(429).json({
         success: false,
-        message: "Bahut zyada galat koshishein. Naya OTP mangwaiye.",
+        message: "Too many incorrect attempts. Please request a new code.",
       });
     }
 
@@ -156,8 +156,8 @@ router.post("/verify-otp", async (req, res) => {
       return res.status(400).json({
         success: false,
         message: left > 0
-          ? `Galat OTP. ${left} koshish baaki.`
-          : "Galat OTP. Naya OTP mangwaiye.",
+          ? `Incorrect code. ${left} ${left === 1 ? "attempt" : "attempts"} remaining.`
+          : "Incorrect code. Please request a new one.",
       });
     }
 
@@ -166,7 +166,7 @@ router.post("/verify-otp", async (req, res) => {
 
     const user = await User.findOne({ email });
     if (!user) {
-      return res.status(404).json({ success: false, message: "Account nahi mila" });
+      return res.status(404).json({ success: false, message: "Account not found" });
     }
 
     // Pehli baar login — referral code abhi bana do
@@ -213,10 +213,10 @@ router.put("/me", protectUser, async (req, res) => {
     });
 
     await req.user.save();
-    res.json({ success: true, message: "Profile update ho gayi ✅", user: publicUser(req.user) });
+    res.json({ success: true, message: "Profile updated", user: publicUser(req.user) });
   } catch (err) {
     console.error("update profile error:", err);
-    res.status(500).json({ success: false, message: "Update fail ho gaya" });
+    res.status(500).json({ success: false, message: "Could not update your profile" });
   }
 });
 

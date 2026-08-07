@@ -14,17 +14,17 @@ const protectUser = async (req, res, next) => {
   try {
     const token = readToken(req);
     if (!token) {
-      return res.status(401).json({ success: false, message: "Please login to continue" });
+      return res.status(401).json({ success: false, message: "Please log in to continue" });
     }
 
     const decoded = verifyUserToken(token);
     if (!decoded) {
-      return res.status(401).json({ success: false, message: "Session expire ho gaya. Dobara login karein." });
+      return res.status(401).json({ success: false, message: "Your session has expired. Please log in again." });
     }
 
     const user = await User.findById(decoded.id);
     if (!user) {
-      return res.status(401).json({ success: false, message: "Account nahi mila" });
+      return res.status(401).json({ success: false, message: "Account not found" });
     }
 
     req.user = user;

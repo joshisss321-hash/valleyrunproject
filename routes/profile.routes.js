@@ -12,8 +12,8 @@ const { generateCoachTip, statsSignature }  = require("../utils/aiTip");
 const {
   ensureReferralCode,
   WELCOME_PERCENT,
-  REWARD_PERCENT,
-  REFERRALS_PER_REWARD,
+  REWARD_PER_REFERRAL,
+  REWARD_MAX_PERCENT,
 } = require("../utils/referral");
 
 const SITE_URL = process.env.SITE_URL || "https://valleyrun.in";
@@ -38,7 +38,7 @@ const buildMedalTimeline = (reg, submission) => {
     {
       key:   "registered",
       label: "Registration Confirmed",
-      note:  "Aapki entry confirm ho gayi",
+      note:  "Your entry is confirmed",
       done:  true,
       at:    reg.createdAt,
     },
@@ -46,10 +46,10 @@ const buildMedalTimeline = (reg, submission) => {
       key:   "verified",
       label: "Activity Verified",
       note:  verified
-        ? "Aapki activity approve ho gayi"
+        ? "Your activity has been approved"
         : submission
-          ? "Verification pending hai"
-          : "Activity submit karna baaki hai",
+          ? "Verification in progress"
+          : "Activity not submitted yet",
       done:  verified,
       at:    historyAt("verified") || (verified ? submission?.updatedAt : null),
     },
@@ -58,16 +58,16 @@ const buildMedalTimeline = (reg, submission) => {
       label: "Medal Dispatched",
       note:  dispatched
         ? reg.courier
-          ? `${reg.courier} se bheja gaya`
-          : "Courier ko de diya gaya"
-        : "Verification ke baad dispatch hoga",
+          ? `Shipped via ${reg.courier}`
+          : "Handed over to the courier"
+        : "Ships once your activity is verified",
       done:  dispatched,
       at:    reg.dispatchedAt || historyAt("dispatched"),
     },
     {
       key:   "delivered",
       label: "Delivered",
-      note:  delivered ? "Medal aap tak pahunch gaya 🏅" : "Delivery ka intezaar",
+      note:  delivered ? "Your medal has arrived 🏅" : "Awaiting delivery",
       done:  delivered,
       at:    reg.deliveredAt || historyAt("delivered"),
     },
@@ -214,8 +214,14 @@ router.get("/", protectUser, async (req, res) => {
       .sort({ createdAt: -1 })
       .lean();
 
-    const count    = user.referralCount || 0;
-    const toNext   = REFERRALS_PER_REWARD - (count % REFERRALS_PER_REWARD);
+    const count = user.referralCount || 0;
+
+    // Abhi chal raha coupon — har referral pe 2% badhta hai
+    const activeReward = coupons.find(
+      (c) => c.kind === "referral_reward" && c.usedCount < c.maxUses
+    );
+    const currentPercent = activeReward?.value || 0;
+    const atMax          = currentPercent >= REWARD_MAX_PERCENT;
 
     res.json({
       success: true,
@@ -236,13 +242,21 @@ router.get("/", protectUser, async (req, res) => {
       coachTip,
       events,
       referral: {
-        code:        user.referralCode,
-        link:        `${SITE_URL}?ref=${user.referralCode}`,
+        code: user.referralCode,
+        link: `${SITE_URL}?ref=${user.referralCode}`,
         count,
-        toNextReward: count > 0 && toNext === REFERRALS_PER_REWARD ? 0 : toNext,
-        perReward:   REFERRALS_PER_REWARD,
-        rewardPercent:  REWARD_PERCENT,
-        welcomePercent: WELCOME_PERCENT,
+
+        // Rules — frontend inhi se text banata hai, hardcode kuch nahi
+        perReferralPercent: REWARD_PER_REFERRAL,
+        maxPercent:         REWARD_MAX_PERCENT,
+        welcomePercent:     WELCOME_PERCENT,
+
+        // Abhi ki halat
+        currentPercent,
+        atMax,
+        nextPercent: atMax
+          ? REWARD_MAX_PERCENT
+          : Math.min(currentPercent + REWARD_PER_REFERRAL, REWARD_MAX_PERCENT),
         coupons: coupons.map((c) => ({
           code:      c.code,
           value:     c.value,
@@ -255,7 +269,7 @@ router.get("/", protectUser, async (req, res) => {
     });
   } catch (err) {
     console.error("profile error:", err);
-    res.status(500).json({ success: false, message: "Profile load nahi ho payi" });
+    res.status(500).json({ success: false, message: "Could not load your profile" });
   }
 });
 
@@ -273,7 +287,7 @@ router.get("/track/:registrationId", protectUser, async (req, res) => {
       .lean();
 
     if (!reg) {
-      return res.status(404).json({ success: false, message: "Registration nahi mili" });
+      return res.status(404).json({ success: false, message: "Registration not found" });
     }
 
     const sub = await RunSubmission.findOne({
