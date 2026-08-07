@@ -4,7 +4,7 @@ const OTP_LENGTH   = 6;
 const OTP_TTL_MIN  = 10;  // OTP kitni der valid rahega
 const MAX_ATTEMPTS = 5;   // itni galat koshishon ke baad OTP dead
 const RESEND_COOLDOWN_SEC = 60;  // do OTP ke beech minimum gap
-const MAX_PER_WINDOW      = 5;   // 15 min mein max itne OTP
+const MAX_PER_WINDOW      = 10;  // 15 min mein max itne OTP (testing ke liye 5 kam pad raha tha)
 const WINDOW_MIN          = 15;
 
 /** 6-digit code, cryptographically random (Math.random se nahi). */

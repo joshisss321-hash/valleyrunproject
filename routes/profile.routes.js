@@ -1,11 +1,16 @@
 const express = require("express");
 const router  = express.Router();
+const multer  = require("multer");
+const fs      = require("fs");
 
 const Registration  = require("../models/Registration");
 const RunSubmission = require("../models/RunSubmission");
 const Coupon        = require("../models/Coupon");
+const Event         = require("../models/Event");
+const imagekit      = require("../config/cloudinary");
 
 const { protectUser } = require("../middleware/userAuth");
+const { submissionWindow } = require("../utils/submissionWindow");
 const { buildStats }  = require("../utils/coach");
 const { getNearestCategory, sortByTiming } = require("../utils/categories");
 const { generateCoachTip, statsSignature }  = require("../utils/aiTip");
@@ -86,7 +91,11 @@ router.get("/", protectUser, async (req, res) => {
     /* ── 1. Registrations + submissions ── */
     const [registrations, submissions] = await Promise.all([
       Registration.find({ user: user._id })
-        .populate("event", "title slug dates medalImage coverImage heroImage image")
+        .populate(
+          "event",
+          "title slug dates medalImage coverImage heroImage image " +
+          "registrationDeadline submissionDeadline isRegistrationOpen isPrevious categories"
+        )
         .sort({ createdAt: -1 })
         .lean(),
       RunSubmission.find({ email: user.email }).sort({ createdAt: -1 }).lean(),
@@ -149,8 +158,21 @@ router.get("/", protectUser, async (req, res) => {
       const slug = reg.eventSlug || reg.event?.slug || "";
       const sub  = submissionBySlug[slug];
 
+      // Submission window — rule ek hi jagah rehta hai (utils/submissionWindow)
+      const window = submissionWindow(reg.event);
+
       return {
         registrationId: reg._id,
+
+        // Profile se seedha submit karne ke liye
+        submission_window: {
+          open:       window.open,
+          reason:     window.reason || "",
+          opensAfter: window.opensAfter || null,
+          closesOn:   window.closesOn   || null,
+        },
+        canSubmit:  window.open && !sub,
+        categories: reg.event?.categories?.length ? reg.event.categories : [],
         bibNumber:      reg.bibNumber || "",
         category:       reg.category,
         registeredAt:   reg.createdAt,
@@ -311,5 +333,134 @@ router.get("/track/:registrationId", protectUser, async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
+/* ═══════════════════════════════════════════════════════════
+   POST /api/profile/submit-activity
+   Logged-in user apni activity seedhe profile se submit karta hai.
+
+   Phone/email se dhoondhne ki zaroorat nahi — token se pata hai
+   kaun hai. Isliye galat number daalne wali dikkat hi khatam.
+═══════════════════════════════════════════════════════════ */
+const upload  = multer({
+  dest: "uploads/",
+  limits: { fileSize: 12 * 1024 * 1024 }, // 12MB — phone screenshots ke liye kaafi
+});
+
+const cleanup = (file) => {
+  if (file && fs.existsSync(file.path)) {
+    try { fs.unlinkSync(file.path); } catch {}
+  }
+};
+
+router.post(
+  "/submit-activity",
+  protectUser,
+  upload.single("image"),
+  async (req, res) => {
+    try {
+      const { eventSlug, distance, timing } = req.body;
+      const user = req.user;
+
+      if (!eventSlug || !distance) {
+        cleanup(req.file);
+        return res.status(400).json({ success: false, message: "Event and distance are required" });
+      }
+      if (!req.file) {
+        return res.status(400).json({ success: false, message: "A screenshot of your activity is required" });
+      }
+
+      /* 1. User is event mein register hai? */
+      const event = await Event.findOne({ slug: eventSlug });
+      if (!event) {
+        cleanup(req.file);
+        return res.status(404).json({ success: false, message: "Event not found" });
+      }
+
+      const registration = await Registration.findOne({ user: user._id, event: event._id });
+      if (!registration) {
+        cleanup(req.file);
+        return res.status(403).json({
+          success: false,
+          message: "You are not registered for this event",
+        });
+      }
+
+      /* 2. Submission window khula hai? (wahi rule jo profile dikhata hai) */
+      const window = submissionWindow(event);
+      if (!window.open) {
+        cleanup(req.file);
+        return res.status(400).json({ success: false, message: window.reason });
+      }
+
+      /* 3. Pehle se submit to nahi kiya? */
+      const existing = await RunSubmission.findOne({
+        email:     user.email,
+        eventSlug,
+      });
+      if (existing) {
+        cleanup(req.file);
+        return res.status(400).json({
+          success: false,
+          message: existing.status === "approved"
+            ? "Your activity has already been verified ✅"
+            : "You have already submitted for this event. Verification is in progress.",
+        });
+      }
+
+      /* 4. Screenshot compress karke ImageKit par */
+      const sharp = require("sharp");
+      const fileBuffer = await sharp(req.file.path)
+        .resize(1200, 1200, { fit: "inside", withoutEnlargement: true })
+        .jpeg({ quality: 70 })
+        .toBuffer();
+
+      const uploaded = await imagekit.upload({
+        file:     fileBuffer,
+        fileName: `${Date.now()}.jpg`,
+        folder:   `/valleyrun/submissions/${eventSlug}`,
+      });
+      cleanup(req.file);
+
+      /* 5. Save — identity token se, form se nahi */
+      const submission = await RunSubmission.create({
+        name:      user.name,
+        email:     user.email,
+        phone:     user.phone || "",
+        distance,
+        timing:    timing || "",
+        eventSlug,
+        imageUrl:  uploaded.url,
+        status:    "pending",
+      });
+
+      console.log(`✅ Activity submitted from profile: ${user.email} | ${eventSlug} | ${distance}`);
+
+      res.json({
+        success: true,
+        message: "Submitted! We will verify it within 24 hours 🎉",
+        submission: {
+          status:   submission.status,
+          distance: submission.distance,
+          timing:   submission.timing,
+          imageUrl: submission.imageUrl,
+          at:       submission.createdAt,
+        },
+      });
+    } catch (err) {
+      cleanup(req.file);
+
+      // Duplicate index ne roka (do tabs se ek saath submit)
+      if (err.code === 11000) {
+        return res.status(400).json({
+          success: false,
+          message: "You have already submitted for this event",
+        });
+      }
+
+      console.error("submit-activity error:", err);
+      res.status(500).json({ success: false, message: "Something went wrong. Please try again." });
+    }
+  }
+);
 
 module.exports = router;

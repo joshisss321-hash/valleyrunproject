@@ -72,19 +72,31 @@ router.post("/send-otp", async (req, res) => {
       }
     }
 
-    // ── Window limit: 15 min mein max 5 OTP ──
+    // ── Window limit: 15 min mein max itne OTP ──
     const windowStart = new Date(Date.now() - WINDOW_MIN * 60 * 1000);
-    const recentCount = await Otp.countDocuments({ email, createdAt: { $gte: windowStart } });
-    if (recentCount >= MAX_PER_WINDOW) {
+    const recent      = await Otp.find({ email, createdAt: { $gte: windowStart } })
+      .sort({ createdAt: 1 })
+      .select("createdAt")
+      .lean();
+
+    if (recent.length >= MAX_PER_WINDOW) {
+      // Sabse purana OTP window se bahar hone par hi agla mil sakta hai
+      const freeAt     = new Date(recent[0].createdAt.getTime() + WINDOW_MIN * 60 * 1000);
+      const waitMin    = Math.max(1, Math.ceil((freeAt - Date.now()) / 60000));
+
+      console.warn(`⛔ OTP rate limit: ${email} — ${recent.length} in ${WINDOW_MIN}min, wait ${waitMin}min`);
+
       return res.status(429).json({
         success: false,
-        message: `Too many requests. Please try again in ${WINDOW_MIN} minutes.`,
+        code:    "RATE_LIMITED",
+        message: `Too many code requests. Please try again in ${waitMin} minute${waitMin === 1 ? "" : "s"}.`,
+        retryAfterMin: waitMin,
       });
     }
 
     const code = generateCode();
 
-    await Otp.create({
+    const otpDoc = await Otp.create({
       email,
       codeHash:  hashCode(code),
       expiresAt: new Date(Date.now() + OTP_TTL_MIN * 60 * 1000),
@@ -98,11 +110,24 @@ router.post("/send-otp", async (req, res) => {
     });
 
     if (!sent) {
+      /* Email gaya hi nahi — to is koshish ki saza user ko kyun?
+         OTP doc hata do, warna wo 60 second ke cooldown mein phas
+         jaata hai bina koi code mile. */
+      await Otp.deleteOne({ _id: otpDoc._id }).catch(() => {});
+
+      console.error(
+        `❌ OTP email FAILED for ${email} — Brevo ne bhejne se mana kiya. ` +
+        `BREVO_API_KEY / daily quota check karein. Cooldown reset kar diya.`
+      );
+
       return res.status(502).json({
         success: false,
+        code:    "EMAIL_FAILED",
         message: "We could not send the email. Please try again shortly.",
       });
     }
+
+    console.log(`📧 OTP sent to ${email} (${recent.length + 1}/${MAX_PER_WINDOW} in this ${WINDOW_MIN}min window)`);
 
     res.json({
       success:      true,
