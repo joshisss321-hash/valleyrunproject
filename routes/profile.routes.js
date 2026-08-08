@@ -335,6 +335,57 @@ router.get("/track/:registrationId", protectUser, async (req, res) => {
 });
 
 /* ═══════════════════════════════════════════════════════════
+   POST /api/profile/confirm-delivery/:registrationId
+
+   "Medal mil gaya" — runner khud batata hai.
+
+   Courier ka API na hone par delivered status kabhi apne aap nahi
+   badalta. Runner ko to pata hi hota hai ki medal aaya ya nahi —
+   ek tap mein timeline poori, aur admin ko asli delivery data.
+═══════════════════════════════════════════════════════════ */
+router.post("/confirm-delivery/:registrationId", protectUser, async (req, res) => {
+  try {
+    const reg = await Registration.findOne({
+      _id:  req.params.registrationId,
+      user: req.user._id,          // 🔒 sirf apni registration
+    });
+
+    if (!reg) {
+      return res.status(404).json({ success: false, message: "Registration not found" });
+    }
+
+    if (reg.medalStatus === "delivered") {
+      return res.json({ success: true, message: "Already marked as delivered" });
+    }
+
+    // Bina dispatch hue "mil gaya" nahi ho sakta
+    if (reg.medalStatus !== "dispatched") {
+      return res.status(400).json({
+        success: false,
+        message: "Your medal has not been dispatched yet",
+      });
+    }
+
+    const now = new Date();
+    reg.medalStatus = "delivered";
+    reg.deliveredAt = now;
+    reg.statusHistory.push({
+      status: "delivered",
+      note:   "Confirmed by runner",
+      at:     now,
+    });
+    await reg.save();
+
+    console.log(`🏅 Delivery confirmed by runner: ${req.user.email} | ${reg.eventSlug}`);
+
+    res.json({ success: true, message: "Thank you! Enjoy your medal 🏅" });
+  } catch (err) {
+    console.error("confirm-delivery error:", err);
+    res.status(500).json({ success: false, message: "Could not update. Please try again." });
+  }
+});
+
+/* ═══════════════════════════════════════════════════════════
    POST /api/profile/submit-activity
    Logged-in user apni activity seedhe profile se submit karta hai.
 
