@@ -2,7 +2,7 @@ const express = require("express");
 const router  = express.Router();
 
 const { optionalUser } = require("../middleware/userAuth");
-const { SYSTEM_PROMPT, SUPPORT_PHONE, SUPPORT_EMAIL } = require("../utils/chatKnowledge");
+const { SYSTEM_PROMPT, SUPPORT_PHONE, SUPPORT_EMAIL, WHATSAPP_CHANNEL } = require("../utils/chatKnowledge");
 const { TOOL_DEFS, runTool } = require("../utils/chatTools");
 
 /* Opus 5 default. Sasta chahiye to .env mein CHAT_MODEL=claude-haiku-4-5 */
@@ -48,13 +48,93 @@ const getClient = () => {
   }
 };
 
-/* AI band ho to bhi user ko khaali haath na lautayein */
-const FALLBACK =
-  `I can't answer that right now, but the team can help you straight away.\n\n` +
-  `📞 ${SUPPORT_PHONE}\n✉️ ${SUPPORT_EMAIL}\n\n` +
-  `Quick answers: activity submission opens once registration for your event closes — ` +
-  `you'll find the Submit button in your profile under "My Events", and on the ` +
-  `Activity Submission page. Medal tracking also shows in your profile.`;
+/* ── AI band ho (key nahi / error) to bhi kaam ka jawab ──
+   Ye chhota keyword-matcher hai, na ki ek hi ratta-ratayi line.
+   Sabse zyada poochhe jaane wale sawaalon ke jawab yahin se aa jaate hain. */
+const CONTACT = `\n\n📞 ${SUPPORT_PHONE}\n✉️ ${SUPPORT_EMAIL}`;
+
+const CANNED = [
+  {
+    // Sirf abhivadan — "jawab nahi de pa raha" kehna galat hoga
+    match: /^\s*(hi|hey|hello|hlo|namaste|namaskar|hii+|yo|good (morning|evening|afternoon))\b[\s!.?]*$/i,
+    reply:
+      `Namaste! 👋 Main in sab mein madad kar sakta hoon:\n\n` +
+      `• Activity kaise aur kab submit karni hai\n` +
+      `• Medal kahan pahuncha — tracking\n` +
+      `• Login / OTP ki dikkat\n` +
+      `• Referral aur discount\n` +
+      `• Leaderboard aur rank\n\n` +
+      `Bas apna sawaal likh dijiye.`,
+  },
+  {
+    match: /submit|submission|screenshot|proof|upload|activity/i,
+    reply:
+      `Activity submission tabhi khulta hai jab us event ki registration band ho jaye.\n\n` +
+      `Uske baad teen tarike hain:\n` +
+      `• Profile — valleyrun.in/login par login karke "My Events" mein Submit button\n` +
+      `• Website ka Activity Submission page — apna registered phone ya email daal kar\n` +
+      `• WhatsApp channel — ${WHATSAPP_CHANNEL}\n\n` +
+      `Screenshot kisi bhi GPS app ka chalega (Strava, Nike Run Club, Garmin, Google Fit) — ` +
+      `usme app ka naam aur distance saaf dikhna chahiye.`,
+  },
+  {
+    match: /medal|tracking|delivery|courier|kab aayega|shipping|parcel/i,
+    reply:
+      `Medal activity approve hone ke baad dispatch hota hai. Dispatch ke baad aam taur par 5-10 din lagte hain.\n\n` +
+      `Tracking ID aur courier aapki profile mein "Medal Tracking" tab mein dikhte hain — ` +
+      `valleyrun.in/login se login kijiye.`,
+  },
+  {
+    match: /otp|login|log in|sign in|code nahi|password/i,
+    reply:
+      `Login ke liye password nahi chahiye. valleyrun.in/login par apni registered email daaliye, ` +
+      `6-digit code email par aa jayega (10 minute valid).\n\n` +
+      `Code na aaye to: spam folder dekhiye, do requests ke beech 60 second ka gap rakhiye, ` +
+      `aur dhyan rakhiye ki wahi email ho jo registration mein di thi.`,
+  },
+  {
+    match: /refund|cancel|paisa wapas|money back/i,
+    reply:
+      `Registration fee aam taur par non-refundable hai. Refund sirf tab milta hai jab Valley Run khud ` +
+      `event cancel kare.\n\nKoi refund request ho to registration ke 7 din ke andar email kijiye — ` +
+      `team dekhegi.${CONTACT}`,
+  },
+  {
+    match: /referral|refer|discount|coupon|code/i,
+    reply:
+      `Har runner ko apni profile mein "Refer & Earn" tab mein referral code milta hai.\n\n` +
+      `Aapke code se koi register kare to use 2% off milta hai, aur aapka apna coupon har referral pe ` +
+      `2% badhta hai — zyada se zyada 20% tak (5 referrals = 10%, 10 referrals = 20%).`,
+  },
+  {
+    match: /leaderboard|rank|position|timing/i,
+    reply:
+      `Leaderboard par sirf approved activities aati hain, har distance category mein timing ke hisaab se ` +
+      `— sabse tez sabse upar.\n\nTiming diye bina activity complete to ginti hai par rank nahi milta.`,
+  },
+  {
+    match: /certificate/i,
+    reply:
+      `Digital certificate package mein shaamil hai. Abhi site par download ka option nahi hai — ` +
+      `team ise bhejti hai.${CONTACT}`,
+  },
+  {
+    match: /event|price|kitne ka|registration|join|kaise/i,
+    reply:
+      `Chalu events, unki price aur last date valleyrun.in ke Challenges page par dikhti hai.\n\n` +
+      `Registration seedha-sada hai: event chuniye, form bhariye (address dhyan se — medal wahi ` +
+      `aayega), aur Razorpay se payment kijiye. Do minute ka kaam hai.`,
+  },
+];
+
+const FALLBACK_DEFAULT =
+  `Main abhi is sawaal ka jawab nahi de pa raha, par team turant madad kar degi.${CONTACT}`;
+
+const cannedReply = (text) => {
+  const q = String(text || "");
+  const hit = CANNED.find((c) => c.match.test(q));
+  return hit ? hit.reply : FALLBACK_DEFAULT;
+};
 
 /* ═══════════════════════════════════════════════════════════
    POST /api/chat
@@ -84,9 +164,11 @@ router.post("/", optionalUser, async (req, res) => {
       });
     }
 
+    const lastUser = [...incoming].reverse().find((m) => m?.role === "user")?.content || "";
+
     const client = getClient();
     if (!client) {
-      return res.json({ success: true, reply: FALLBACK, degraded: true });
+      return res.json({ success: true, reply: cannedReply(lastUser), degraded: true });
     }
 
     /* ── History saaf karo: sirf role+content, aur aakhri kuch hi ── */
@@ -130,7 +212,7 @@ router.post("/", optionalUser, async (req, res) => {
 
       if (response.stop_reason === "refusal") {
         console.warn("⚠️ chat refusal:", response.stop_details?.category);
-        reply = FALLBACK;
+        reply = cannedReply(lastUser);
         break;
       }
 
@@ -160,10 +242,11 @@ router.post("/", optionalUser, async (req, res) => {
       messages.push({ role: "user", content: results });
     }
 
-    res.json({ success: true, reply: reply || FALLBACK });
+    res.json({ success: true, reply: reply || cannedReply(lastUser) });
   } catch (err) {
     console.error("chat error:", err.message);
-    res.json({ success: true, reply: FALLBACK, degraded: true });
+    const lastUser = (req.body?.messages || []).filter((m) => m?.role === "user").pop()?.content || "";
+    res.json({ success: true, reply: cannedReply(lastUser), degraded: true });
   }
 });
 
