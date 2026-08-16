@@ -26,6 +26,7 @@ const authUserRoutes  = require("./routes/auth.user");       // email OTP login
 const profileRoutes   = require("./routes/profile.routes");  // dashboard + stats + coach
 const couponRoutes    = require("./routes/coupon.routes");   // checkout coupon/referral
 const adminTracking   = require("./routes/admin.tracking");  // bulk tracking-ID upload
+const chatRoutes      = require("./routes/chat.routes");     // support chatbot
 
 const app = express();
 
@@ -67,6 +68,7 @@ app.use("/api", publicReviews);
 app.use("/api/auth",    authUserRoutes);
 app.use("/api/profile", profileRoutes);
 app.use("/api/coupon",  couponRoutes);
+app.use("/api/chat",    chatRoutes);
 
 /* ── ADMIN ── */
 app.use("/api/admin/events",         adminEvents);
