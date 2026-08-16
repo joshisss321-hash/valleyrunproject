@@ -55,6 +55,24 @@ const TOOL_DEFS = [
     input_schema: { type: "object", properties: {}, additionalProperties: false },
   },
   {
+    name: "get_active_coupons",
+    description:
+      "Get the discount coupons that are genuinely active in the Valley Run system right now. " +
+      "ALWAYS call this before answering anything about coupons, promo codes, discounts or offers. " +
+      "Never state or guess a coupon code without calling this first. If it returns none, tell the " +
+      "runner there is no active coupon rather than inventing one. Works without login.",
+    input_schema: { type: "object", properties: {}, additionalProperties: false },
+  },
+  {
+    name: "get_my_payment_and_address",
+    description:
+      "Get the logged-in runner's payment record and the delivery address saved at registration — " +
+      "amount paid, payment ID, and the full shipping address. Call this for 'did my payment go through', " +
+      "'payment fail ho gaya', 'paisa kat gaya', 'my address is wrong', or 'where will my medal be " +
+      "delivered'. Requires login.",
+    input_schema: { type: "object", properties: {}, additionalProperties: false },
+  },
+  {
     name: "get_referral_status",
     description:
       "Get the logged-in runner's referral code, how many people have joined using it, " +
@@ -163,7 +181,7 @@ const impl = {
         note: {
           pending:    "Medal ships once the activity is verified",
           verified:   "Activity verified — medal will be dispatched soon",
-          dispatched: "On its way. Usually 5-10 days from dispatch",
+          dispatched: "On its way. Usually 7-10 days from dispatch",
           delivered:  "Delivered",
         }[r.medalStatus || "pending"],
       })),
@@ -203,6 +221,71 @@ const impl = {
             : null,
         };
       }),
+    };
+  },
+
+  async get_active_coupons() {
+    const now = new Date();
+
+    const coupons = await Coupon.find({
+      kind:   "manual",          // referral rewards kisi ek bande ke hote hain — public nahi
+      active: true,
+      owner:  null,              // kisi ek user se bandhe hue nahi
+      $expr:  { $lt: ["$usedCount", "$maxUses"] },
+      $or: [{ expiresAt: null }, { expiresAt: { $gt: now } }],
+    }).lean();
+
+    if (!coupons.length) {
+      return {
+        active_coupons: [],
+        note:
+          "No public coupon is active right now. Tell the runner plainly that there is no " +
+          "active coupon — do NOT invent one. Their referral code still gives a discount.",
+      };
+    }
+
+    return {
+      active_coupons: coupons.map((c) => ({
+        code:      c.code,
+        discount:  c.discountType === "percent" ? `${c.value}% off` : `₹${c.value} off`,
+        event:     c.eventSlug || "all events",
+        min_order: c.minAmount ? `₹${c.minAmount}` : null,
+        expires:   fmtDate(c.expiresAt),
+        uses_left: c.maxUses - c.usedCount,
+      })),
+    };
+  },
+
+  async get_my_payment_and_address(user) {
+    if (!user) return NEEDS_LOGIN;
+
+    const regs = await Registration.find({ user: user._id })
+      .populate("event", "title")
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const address = [user.address1, user.address2, user.landmark, user.city, user.state, user.pincode]
+      .filter(Boolean)
+      .join(", ");
+
+    return {
+      delivery_address: address || "No address saved",
+      phone:            user.phone || null,
+      address_note:
+        "This is where medals are couriered. If it is wrong and nothing has shipped yet, " +
+        "the runner can update it from their profile. If it has already shipped, support must handle it.",
+      payments: regs.map((r) => ({
+        event:      r.event?.title || r.eventSlug,
+        registration_id: r.bibNumber || "not assigned",
+        amount_paid: r.amount ? `₹${r.amount}` : "not recorded",
+        discount:    r.discountAmount ? `₹${r.discountAmount} (${r.couponCode})` : "none",
+        payment_id:  r.paymentId || null,
+        status:      r.status || "unknown",
+        paid_on:     fmtDate(r.createdAt),
+      })),
+      note: regs.length
+        ? "A registration exists, so the payment went through."
+        : "No registration found for this runner — if money was deducted, this needs the support team.",
     };
   },
 

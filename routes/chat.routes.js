@@ -55,80 +55,112 @@ const CONTACT = `\n\n📞 ${SUPPORT_PHONE}\n✉️ ${SUPPORT_EMAIL}`;
 
 const CANNED = [
   {
-    // Sirf abhivadan — "jawab nahi de pa raha" kehna galat hoga
+    // Sirf abhivadan — "can't answer" kehna galat hoga
     match: /^\s*(hi|hey|hello|hlo|namaste|namaskar|hii+|yo|good (morning|evening|afternoon))\b[\s!.?]*$/i,
     reply:
-      `Namaste! 👋 Main in sab mein madad kar sakta hoon:\n\n` +
-      `• Activity kaise aur kab submit karni hai\n` +
-      `• Medal kahan pahuncha — tracking\n` +
-      `• Login / OTP ki dikkat\n` +
-      `• Referral aur discount\n` +
-      `• Leaderboard aur rank\n\n` +
-      `Bas apna sawaal likh dijiye.`,
+      `Hello! I can help you with:\n\n` +
+      `• How and when to submit your activity\n` +
+      `• Medal dispatch and tracking\n` +
+      `• Login and profile\n` +
+      `• Referrals and discounts\n` +
+      `• Leaderboard and rankings\n\n` +
+      `Just type your question.`,
   },
   {
-    match: /submit|submission|screenshot|proof|upload|activity/i,
+    match: /submit|submission|screenshot|proof|upload|activity|kaha daal|kaise daal/i,
     reply:
-      `Activity submission tabhi khulta hai jab us event ki registration band ho jaye.\n\n` +
-      `Uske baad teen tarike hain:\n` +
-      `• Profile — valleyrun.in/login par login karke "My Events" mein Submit button\n` +
-      `• Website ka Activity Submission page — apna registered phone ya email daal kar\n` +
-      `• WhatsApp channel — ${WHATSAPP_CHANNEL}\n\n` +
-      `Screenshot kisi bhi GPS app ka chalega (Strava, Nike Run Club, Garmin, Google Fit) — ` +
-      `usme app ka naam aur distance saaf dikhna chahiye.`,
+      `Activity submission opens only after registration for your event closes. ` +
+      `Before that the submit option does not appear anywhere — that is normal.\n\n` +
+      `Once registration closes:\n` +
+      `1. Log in at valleyrun.in/login\n` +
+      `2. Open "My Events" — the Submit Activity button is on your event card\n` +
+      `3. Add your distance, timing and screenshot, then submit\n\n` +
+      `You can also use the Activity Submission page on the website and find your ` +
+      `registration with your registered phone number or email. Any GPS app works ` +
+      `(Strava, Nike Run Club, Garmin, Google Fit) — the screenshot should clearly ` +
+      `show the app name and the distance.`,
   },
   {
-    match: /medal|tracking|delivery|courier|kab aayega|shipping|parcel/i,
+    match: /medal|tracking|delivery|courier|kab aayega|kb ayega|shipping|parcel|dispatch/i,
     reply:
-      `Medal activity approve hone ke baad dispatch hota hai. Dispatch ke baad aam taur par 5-10 din lagte hain.\n\n` +
-      `Tracking ID aur courier aapki profile mein "Medal Tracking" tab mein dikhte hain — ` +
-      `valleyrun.in/login se login kijiye.`,
+      `Your medal is dispatched after your activity is approved. Delivery usually takes ` +
+      `7-10 days from dispatch.\n\n` +
+      `The tracking ID and courier appear in your profile under "Medal Tracking" — ` +
+      `log in at valleyrun.in/login to see yours.`,
   },
   {
-    match: /otp|login|log in|sign in|code nahi|password/i,
+    match: /otp|login|log in|sign in|code nahi|password|profile kaha/i,
     reply:
-      `Login ke liye password nahi chahiye. valleyrun.in/login par apni registered email daaliye, ` +
-      `6-digit code email par aa jayega (10 minute valid).\n\n` +
-      `Code na aaye to: spam folder dekhiye, do requests ke beech 60 second ka gap rakhiye, ` +
-      `aur dhyan rakhiye ki wahi email ho jo registration mein di thi.`,
+      `No password needed. Go to valleyrun.in/login, enter your registered email, and a ` +
+      `6-digit code arrives by email. It stays valid for 10 minutes.\n\n` +
+      `If the code does not arrive: check your spam folder, leave 60 seconds between ` +
+      `requests, and make sure it is the same email you used at registration.`,
+  },
+  {
+    match: /payment|paisa kat|paise kat|razorpay|upi|card|net banking|fail ho gaya|deduct/i,
+    reply:
+      `Payments are processed securely through Razorpay — UPI, cards and net banking all work.\n\n` +
+      `If money was deducted but your registration did not confirm, log in and check your ` +
+      `profile. If the registration is there, the payment went through. If it is not, send ` +
+      `the team your name, registered mobile or email, and the payment reference.${CONTACT}\n\n` +
+      `Valley Run will never ask you for an OTP, PIN or card details.`,
+  },
+  {
+    match: /address|pincode|pin code|wrong address|delivery address|pata/i,
+    reply:
+      `Your medal ships to the address you entered at registration.\n\n` +
+      `If it has not been dispatched yet, you can update the address from your profile. ` +
+      `If it has already shipped, please contact the team — changing it at that stage ` +
+      `is not always possible.${CONTACT}`,
+  },
+  {
+    match: /fake|real hai|genuine|legit|scam|trust|dhokha/i,
+    reply:
+      `Valley Run is a virtual fitness challenge platform. You complete your distance ` +
+      `anywhere you like, submit a GPS screenshot as proof, and once it is verified your ` +
+      `physical medal is couriered to your home.\n\n` +
+      `Payments are handled securely through Razorpay. You can see participant reviews and ` +
+      `medal photos on valleyrun.in`,
   },
   {
     match: /refund|cancel|paisa wapas|money back/i,
     reply:
-      `Registration fee aam taur par non-refundable hai. Refund sirf tab milta hai jab Valley Run khud ` +
-      `event cancel kare.\n\nKoi refund request ho to registration ke 7 din ke andar email kijiye — ` +
-      `team dekhegi.${CONTACT}`,
+      `Registration fees are generally non-refundable. A refund is issued only if Valley Run ` +
+      `cancels an event.\n\n` +
+      `If you need to raise a refund request, please email the team within 7 days of ` +
+      `registration with your details.${CONTACT}`,
   },
   {
-    match: /referral|refer|discount|coupon|code/i,
+    match: /referral|refer|discount|coupon|promo|offer/i,
     reply:
-      `Har runner ko apni profile mein "Refer & Earn" tab mein referral code milta hai.\n\n` +
-      `Aapke code se koi register kare to use 2% off milta hai, aur aapka apna coupon har referral pe ` +
-      `2% badhta hai — zyada se zyada 20% tak (5 referrals = 10%, 10 referrals = 20%).`,
+      `Every runner gets a referral code in their profile under "Refer & Earn".\n\n` +
+      `Anyone who registers with your code gets a discount, and your own coupon grows with ` +
+      `each successful referral. Log in to see your code and your current discount.`,
   },
   {
-    match: /leaderboard|rank|position|timing/i,
+    match: /leaderboard|rank|position|timing|naam nahi/i,
     reply:
-      `Leaderboard par sirf approved activities aati hain, har distance category mein timing ke hisaab se ` +
-      `— sabse tez sabse upar.\n\nTiming diye bina activity complete to ginti hai par rank nahi milta.`,
+      `Only approved activities appear on the leaderboard, ranked by timing within each ` +
+      `distance category — fastest first.\n\n` +
+      `If you did not enter a timing, your activity still counts as completed but cannot be ranked.`,
   },
   {
     match: /certificate/i,
     reply:
-      `Digital certificate package mein shaamil hai. Abhi site par download ka option nahi hai — ` +
-      `team ise bhejti hai.${CONTACT}`,
+      `A digital certificate is part of the package. There is no download option on the site ` +
+      `yet — the team sends it out.${CONTACT}`,
   },
   {
-    match: /event|price|kitne ka|registration|join|kaise/i,
+    match: /event|price|kitne ka|cost|register|join|kaise/i,
     reply:
-      `Chalu events, unki price aur last date valleyrun.in ke Challenges page par dikhti hai.\n\n` +
-      `Registration seedha-sada hai: event chuniye, form bhariye (address dhyan se — medal wahi ` +
-      `aayega), aur Razorpay se payment kijiye. Do minute ka kaam hai.`,
+      `Current events, prices and closing dates are listed on the Challenges page at valleyrun.in\n\n` +
+      `Registering is quick: pick your event, fill the form (check the address carefully — ` +
+      `that is where your medal goes), and pay through Razorpay.`,
   },
 ];
 
 const FALLBACK_DEFAULT =
-  `Main abhi is sawaal ka jawab nahi de pa raha, par team turant madad kar degi.${CONTACT}`;
+  `I don't have that information right now, but the team can help you straight away.${CONTACT}`;
 
 const cannedReply = (text) => {
   const q = String(text || "");
