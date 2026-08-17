@@ -147,8 +147,11 @@ const CANNED = [
   {
     match: /certificate/i,
     reply:
-      `A digital certificate is part of the package. There is no download option on the site ` +
-      `yet — the team sends it out.${CONTACT}`,
+      `Your e-certificate is emailed to you once your activity is approved. It carries ` +
+      `your name and your finish time.\n\n` +
+      `Verification usually takes about 24 hours. It goes to the email address you ` +
+      `registered with — please check your spam folder too. If it still hasn't arrived, ` +
+      `contact the team.${CONTACT}`,
   },
   {
     match: /event|price|kitne ka|cost|register|join|kaise/i,
