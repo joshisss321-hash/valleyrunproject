@@ -8,6 +8,10 @@ const eventSchema = new mongoose.Schema(
     dates:       { type: String, default: "" },
     price:       { type: Number, default: 349 },
 
+    /* Purana/original daam. Sirf tab dikhta hai jab price se zyada ho —
+       warna koi kata hua daam nahi dikhega (jhoothi chhoot nahi). */
+    mrp:         { type: Number, default: null },
+
     // ── Dates ───────────────────────────────────────────────
     registrationDeadline: { type: Date, default: null }, // registration band hone ki date
     submissionDeadline:   { type: Date, default: null }, // activity submit karne ki last date (event end)
