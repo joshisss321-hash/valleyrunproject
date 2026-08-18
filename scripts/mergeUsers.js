@@ -17,7 +17,9 @@
  *    nahi ho sakta (DB ka unique rule). Aisi haalat mein pehle tay
  *    kijiye ki kaun si registration rakhni hai.
  */
-require("dotenv").config({ path: "./.env" });
+// .env script ki apni jagah se dhoondho — terminal kahin se bhi chalaya jaye,
+// chalega. ("./.env" hota to sirf backend folder ke andar se hi chalta.)
+require("dotenv").config({ path: require("path").join(__dirname, "..", ".env") });
 
 const mongoose      = require("mongoose");
 const User          = require("../models/User");
@@ -51,7 +53,15 @@ if (FROM === TO) {
 const line = () => console.log("─".repeat(64));
 
 (async () => {
-  await mongoose.connect(process.env.MONGO_URI);
+  // Production mein MONGO_URI, local .env mein MONGODB_URI — dono chalte hain
+  const uri = process.env.MONGO_URI || process.env.MONGODB_URI;
+  if (!uri) {
+    console.log("\n❌ Database ka pata nahi mila.");
+    console.log("   backend/.env mein MONGO_URI ya MONGODB_URI hona chahiye.\n");
+    process.exit(1);
+  }
+
+  await mongoose.connect(uri);
 
   const from = await User.findOne({ email: FROM });
   const to   = await User.findOne({ email: TO });

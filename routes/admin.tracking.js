@@ -9,6 +9,7 @@ const dispatchedEmail = require("../utils/emailTemplates/medalDispatched");
 const {
   normalisePhone,
   buildTrackingUrl,
+  safeTrackingUrl,
   courierName,
   supportedCouriers,
 } = require("../utils/tracking");
@@ -18,7 +19,10 @@ const SITE_URL = process.env.SITE_URL || "https://valleyrun.in";
 /* ═══════════════════════════════════════════════════════════
    Sheet frontend par parse hoti hai (xlsx wahan pehle se hai),
    yahan sirf JSON rows aate hain:
-     [{ phone, trackingId, courier }, ...]
+     [{ phone, trackingId, courier, trackingUrl }, ...]
+
+   trackingUrl optional hai. Diya ho to wahi chalega; na ho to
+   jaane-pehchane couriers ka link khud ban jata hai.
 ═══════════════════════════════════════════════════════════ */
 
 /** Rows ko event ki registrations se match karta hai. */
@@ -47,6 +51,7 @@ const matchRows = async (eventSlug, rows) => {
     const phone      = normalisePhone(row.phone);
     const trackingId = String(row.trackingId || "").trim();
     const courier    = String(row.courier || "").trim();
+    const rawLink    = String(row.trackingUrl || "").trim();
 
     if (!phone || !trackingId) {
       invalid.push({
@@ -70,6 +75,11 @@ const matchRows = async (eventSlug, rows) => {
       return;
     }
 
+    /* Sheet ka link pehle, warna jaane-pehchane courier ka apne aap bana hua */
+    const sheetLink = safeTrackingUrl(rawLink);
+    const autoLink  = buildTrackingUrl(courier, trackingId);
+    const finalLink = sheetLink || autoLink;
+
     matched.push({
       rowNo,
       registrationId: String(reg._id),
@@ -81,8 +91,12 @@ const matchRows = async (eventSlug, rows) => {
       alreadyHasTracking: Boolean(reg.trackingId),
       trackingId,
       courier:        courierName(courier),
-      trackingUrl:    buildTrackingUrl(courier, trackingId),
-      courierKnown:   Boolean(buildTrackingUrl(courier, trackingId)),
+      trackingUrl:    finalLink,
+      // Link kahan se aaya — preview mein admin ko dikhta hai
+      linkSource:     sheetLink ? "sheet" : autoLink ? "auto" : "none",
+      // Link diya tha par galat tha — chupchaap gira dene se behtar hai batana
+      badLink:        Boolean(rawLink) && !sheetLink,
+      courierKnown:   Boolean(finalLink),
     });
   });
 
@@ -115,7 +129,10 @@ router.post("/preview", protect, async (req, res) => {
         notFound:   result.notFound.length,
         invalid:    result.invalid.length,
         overwrites: result.matched.filter((m) => m.alreadyHasTracking).length,
+        // Jinke paas koi link nahi banega — runner ko sirf number dikhega
         unknownCourier: result.matched.filter((m) => !m.courierKnown).length,
+        linkFromSheet:  result.matched.filter((m) => m.linkSource === "sheet").length,
+        badLinks:       result.matched.filter((m) => m.badLink).length,
       },
       matched:  result.matched,
       notFound: result.notFound,

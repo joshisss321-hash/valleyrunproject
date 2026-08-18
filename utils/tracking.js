@@ -38,6 +38,30 @@ const buildTrackingUrl = (courier, trackingId) => {
 /** Display naam — "delhivery" → "Delhivery", anjaan ho to jaisa diya waisa */
 const courierName = (raw) => courierInfo(raw)?.name || String(raw || "").trim();
 
+/**
+ * Sheet mein diya hua link saaf karke lautata hai.
+ *
+ * Ye link seedha runner ki profile mein clickable jaata hai, isliye
+ * sirf http/https hi manzoor — "javascript:" jaisa kuch chhup kar
+ * andar na aa jaye. Galat ho to khaali string, taaki tuta link na dikhe.
+ */
+const safeTrackingUrl = (raw) => {
+  const value = String(raw || "").trim();
+  if (!value) return "";
+
+  // Log aksar "www.abc.com/track/123" likhte hain — https khud laga do
+  const withScheme = /^https?:\/\//i.test(value) ? value : `https://${value}`;
+
+  try {
+    const url = new URL(withScheme);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return "";
+    if (!url.hostname.includes(".")) return "";   // "https://abc" jaisa adhoora
+    return url.toString();
+  } catch {
+    return "";
+  }
+};
+
 /** Phone ko last 10 digits pe laao — "+91 81717-94766" aur "8171794766" match ho jaayein */
 const normalisePhone = (raw) => {
   const digits = String(raw || "").replace(/\D/g, "");
@@ -49,6 +73,7 @@ module.exports = {
   courierInfo,
   courierName,
   buildTrackingUrl,
+  safeTrackingUrl,
   normalisePhone,
   supportedCouriers: Object.keys(COURIERS),
 };
