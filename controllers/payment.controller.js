@@ -6,6 +6,7 @@ const User = require("../models/User");
 const sendEmail = require("../utils/sendEmail");
 const { resolveDiscount, encodePromo, decodePromo } = require("../utils/referral");
 const { completeRegistration } = require("../utils/completeRegistration");
+const { safeUrl } = require("../utils/safeUrl");
 
 const razorpay = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID,
@@ -251,6 +252,10 @@ const verifyPayment = async (req, res) => {
       bibNumber: registration?.bibNumber || "",
     });
 
+    /* Is event ka WhatsApp group — admin ne bhara ho tabhi email mein
+       button aayega. Link saaf karke, taaki toota/gandaa link na jaye. */
+    const groupLink = safeUrl(event.whatsappLink);
+
     // ✅ Email background mein
     sendEmail({
       to:      email,
@@ -340,6 +345,21 @@ const verifyPayment = async (req, res) => {
                   <div class="step-text"><strong>Receive medal</strong> — Free pan-India delivery after verification!</div>
                 </div>
               </div>
+              ${groupLink ? `
+              <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:20px;margin:24px 0;text-align:center">
+                <p style="margin:0 0 6px;font-size:15px;font-weight:bold;color:#166534">
+                  Join the ${event.title} WhatsApp group
+                </p>
+                <p style="margin:0 0 14px;font-size:13px;color:#15803d;line-height:1.5">
+                  Event updates, reminders and help — all in one place with the other runners.
+                </p>
+                <a href="${groupLink}"
+                   style="display:inline-block;background:#16a34a;color:#ffffff;text-decoration:none;
+                          padding:12px 28px;border-radius:999px;font-weight:bold;font-size:14px">
+                  Join Group
+                </a>
+              </div>` : ""}
+
               <p class="message">
                 We are excited to have you in the Valley Run community! 💪<br><br>
                 <strong>Best regards,<br>Team Valley Run</strong>

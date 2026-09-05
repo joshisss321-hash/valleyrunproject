@@ -35,6 +35,9 @@ const eventSchema = new mongoose.Schema(
     isFeatured:         { type: Boolean, default: false },
 
     // ── Extra ────────────────────────────────────────────────
+    /* Is event ka apna WhatsApp GROUP link (site-wide channel se alag).
+       Bhara ho to registration email aur success page dono par button
+       dikhta hai; khaali chhod dijiye to kahin kuch nahi dikhta. */
     whatsappLink:    { type: String, default: "" },
     offerBadge:      { type: String, default: "" },
     socialProofText: { type: String, default: "" },
