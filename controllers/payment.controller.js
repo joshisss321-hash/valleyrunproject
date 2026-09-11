@@ -36,6 +36,28 @@ const createOrder = async (req, res) => {
        na mile (aur us case mein registration waise bhi nahi banti). */
     const event = eventSlug ? await Event.findOne({ slug: eventSlug }) : null;
 
+    /* Deadline ke baad naya order nahi banega.
+       Pehle sirf cards "band" dikhte the — jiska register page pehle se
+       khula tha, wo deadline ke baad bhi pay kar sakta tha.
+       Sirf NAYA order roka jaata hai: jisne deadline se pehle order bana
+       liya aur thodi der baad pay kiya, uska verify waise hi chalega
+       (paisa kat chuka hai, use rokna galat hoga). */
+    if (event) {
+      const deadline = event.registrationDeadline ? new Date(event.registrationDeadline) : null;
+      const closed =
+        event.isRegistrationOpen === false ||
+        event.isPrevious === true ||
+        (deadline && !isNaN(deadline.getTime()) && Date.now() > deadline.getTime());
+
+      if (closed) {
+        return res.status(400).json({
+          success: false,
+          code:    "REGISTRATION_CLOSED",
+          message: "Registration for this event has closed.",
+        });
+      }
+    }
+
     const serverPrice = Number(event?.price) || 0;
     const clientPrice = Number(amount)       || 0;
 
