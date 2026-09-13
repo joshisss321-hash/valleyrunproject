@@ -198,12 +198,23 @@ router.post("/search-runner", async (req, res) => {
 // POST /api/submit-run
 router.post("/submit-run", upload.single("image"), async (req, res) => {
   try {
-    const { name, email, phone, distance, timing, eventSlug } = req.body;
+    const { name, email, phone, distance, eventSlug } = req.body;
 
     if (!name || !email || !distance || !eventSlug) {
       cleanup(req.file);
       return res.status(400).json({ error: "Missing required fields" });
     }
+
+    /* Finish time ab zaroori hai. Pehle server kabhi nahi maangta tha,
+       isliye bina time wali submissions andar aa jaati thin aur
+       leaderboard par kabhi dikhti hi nahi thin. */
+    const { normaliseTiming } = require("../utils/timing");
+    const checked = normaliseTiming(req.body.timing);
+    if (!checked.ok) {
+      cleanup(req.file);
+      return res.status(400).json({ error: checked.reason });
+    }
+    const timing = checked.value;
     if (!req.file) {
       return res.status(400).json({ error: "Screenshot is required" });
     }

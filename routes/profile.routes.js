@@ -409,13 +409,23 @@ router.post(
   upload.single("image"),
   async (req, res) => {
     try {
-      const { eventSlug, distance, timing } = req.body;
+      const { eventSlug, distance } = req.body;
       const user = req.user;
 
       if (!eventSlug || !distance) {
         cleanup(req.file);
         return res.status(400).json({ success: false, message: "Event and distance are required" });
       }
+
+      /* Finish time ab zaroori hai — profile wale form par pehle ye
+         "optional" tha, isliye kaafi log bina time ke submit kar dete the. */
+      const { normaliseTiming } = require("../utils/timing");
+      const checked = normaliseTiming(req.body.timing);
+      if (!checked.ok) {
+        cleanup(req.file);
+        return res.status(400).json({ success: false, message: checked.reason });
+      }
+      const timing = checked.value;
       if (!req.file) {
         return res.status(400).json({ success: false, message: "A screenshot of your activity is required" });
       }

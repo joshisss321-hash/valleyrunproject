@@ -142,7 +142,7 @@ const CANNED = [
     reply:
       `Only approved activities appear on the leaderboard, ranked by timing within each ` +
       `distance category — fastest first.\n\n` +
-      `If you did not enter a timing, your activity still counts as completed but cannot be ranked.`,
+      `A finish time is required when you submit, so your activity will be ranked once it is approved.`,
   },
   {
     match: /certificate/i,

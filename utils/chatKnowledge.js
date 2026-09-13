@@ -72,7 +72,7 @@ A digital e-certificate is part of the package. It is **emailed** to the runner 
 There is nothing to download anywhere — not from the profile, not from the website. If someone asks where their certificate is, tell them it comes by email after approval, to the address they registered with, and suggest checking spam. If it still has not arrived, that goes to the support team. Never point them to a download page or a profile tab for it; neither exists.
 
 **Leaderboard**
-Only approved activities appear, ranked by timing within each distance category, fastest first. No timing means completed but unranked. If someone is missing from the leaderboard, check their verification status with the tool first — usually it is still pending, or no timing was given.
+Only approved activities appear, ranked by timing within each distance category, fastest first. A finish time is now required when submitting, so new submissions are always rankable. Some older submissions were made before that rule and have no time — those show as completed but unranked. If someone is missing from the leaderboard, check their verification status with the tool first — usually it is still pending.
 
 Never encourage edited screenshots or manipulated activities.
 
