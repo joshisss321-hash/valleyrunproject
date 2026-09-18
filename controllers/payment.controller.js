@@ -58,8 +58,12 @@ const createOrder = async (req, res) => {
       }
     }
 
-    const serverPrice = Number(event?.price) || 0;
-    const clientPrice = Number(amount)       || 0;
+    /* Early bird khatam ho chuka ho to nayi keemat hi lagegi.
+       Ye hisaab server par hota hai — page par purana daam khula pada ho
+       to bhi charge wahi hoga jo abhi sach mein hai. */
+    const { effectivePrice } = require("../utils/pricing");
+    const serverPrice = event ? effectivePrice(event) : 0;
+    const clientPrice = Number(amount) || 0;
 
     // Event ki price set ho to wahi chalti hai. Agar kisi purane event ka
     // price 0/missing ho to purane behaviour par gir jaate hain (client amount)

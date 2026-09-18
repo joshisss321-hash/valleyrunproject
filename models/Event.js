@@ -12,6 +12,13 @@ const eventSchema = new mongoose.Schema(
        warna koi kata hua daam nahi dikhega (jhoothi chhoot nahi). */
     mrp:         { type: Number, default: null },
 
+    /* ── ⏫ EARLY BIRD — daam apne aap badhega ──────────────
+       priceIncreaseAt: early bird kab tak (us waqt ke baad daam badhta hai)
+       priceAfter:      uske baad ka daam (price se zyada hona chahiye)
+       Dono khaali chhod dijiye to daam kabhi nahi badlega. */
+    priceIncreaseAt: { type: Date,   default: null },
+    priceAfter:      { type: Number, default: null },
+
     // ── Dates ───────────────────────────────────────────────
     registrationDeadline: { type: Date, default: null }, // registration band hone ki date
     submissionDeadline:   { type: Date, default: null }, // activity submit karne ki last date (event end)

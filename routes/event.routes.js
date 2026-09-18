@@ -33,6 +33,7 @@
 // module.exports = router;
 const express = require("express");
 const Event = require("../models/Event");
+const { withPricing } = require("../utils/pricing");
 
 const router = express.Router();
 
@@ -43,9 +44,11 @@ router.get("/", async (req, res) => {
   try {
 
     // 🔥 Only active events
-    const events = await Event.find({ active: true }).sort({ createdAt: -1 });
+    const events = await Event.find({ active: true }).sort({ createdAt: -1 }).lean();
 
-    res.json({ success: true, events });
+    /* `price` par abhi wala daam — early bird khatam ho gaya to nayi keemat.
+       Isse har page apne aap sahi daam dikhata hai, alag se hisaab nahi. */
+    res.json({ success: true, events: events.map(withPricing) });
 
   } catch (err) {
     res.status(500).json({ success: false, message: "Failed to load events" });
@@ -57,13 +60,13 @@ router.get("/", async (req, res) => {
 ================================ */
 router.get("/:slug", async (req, res) => {
   try {
-    const event = await Event.findOne({ slug: req.params.slug });
+    const event = await Event.findOne({ slug: req.params.slug }).lean();
 
     if (!event) {
       return res.status(404).json({ success: false, message: "Event not found" });
     }
 
-    res.json({ success: true, event });
+    res.json({ success: true, event: withPricing(event) });
 
   } catch (err) {
     res.status(500).json({ success: false, message: "Server error" });
