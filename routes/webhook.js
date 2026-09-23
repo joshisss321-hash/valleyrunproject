@@ -196,11 +196,11 @@ router.post(
                   </div>
                   <div class="step">
                     <div class="step-num">3</div>
-                    <div class="step-text"><strong>Once you complete your distance, go back to the event page where you registered.After registration closes, a "Submit Activity" button will appear there.Click it, enter your registered mobile number to find your registration, and submit your activity screenshot.</strong> at: <a href="https://valleyrun.in" style="color:#dc2626">valleyrun.in/activity-submission</a></div>
+                    <div class="step-text"><strong>Submit your activity</strong> — once registration closes, the Submit Activity option opens up. Go to <a href="https://www.valleyrun.in" style="color:#dc2626">www.valleyrun.in</a> and submit directly from the event page, or log in to your profile at <a href="https://valleyrun.in/profile" style="color:#dc2626">valleyrun.in/profile</a> and submit from your event card. Either way, add your distance, finish time and screenshot.</div>
                   </div>
                   <div class="step">
                     <div class="step-num">4</div>
-                    <div class="step-text"><strong>Receive medal</strong> — Free pan-India delivery after verification!</div>
+                    <div class="step-text"><strong>Get your medal</strong> — after verification it ships free anywhere in India. Your tracking ID and courier appear in the same profile under "Medal Tracking".</div>
                   </div>
                   <p class="message">
                     We are excited to have you in the Valley Run community! 💪<br><br>
