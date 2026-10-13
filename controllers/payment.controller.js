@@ -7,6 +7,10 @@ const sendEmail = require("../utils/sendEmail");
 const { resolveDiscount, encodePromo, decodePromo } = require("../utils/referral");
 const { completeRegistration } = require("../utils/completeRegistration");
 const { safeUrl } = require("../utils/safeUrl");
+const {
+  findDuplicateRegistration,
+  duplicateMessage,
+} = require("../utils/duplicateRegistration");
 
 const razorpay = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID,
@@ -54,6 +58,26 @@ const createOrder = async (req, res) => {
           success: false,
           code:    "REGISTRATION_CLOSED",
           message: "Registration for this event has closed.",
+        });
+      }
+
+      /* Ek email / ek number se is event ki registration pehle se hai?
+         To order banao hi mat. Warna paisa kat jaata tha aur entry
+         {user, event} ke unique index par ruk jaati thi — yaani runner
+         ka paisa gaya aur registration bani bhi nahi. */
+      const duplicate = await findDuplicateRegistration({
+        email,
+        phone,
+        eventId: event._id,
+      });
+
+      if (duplicate) {
+        console.log(`⛔ Duplicate roki gayi (${duplicate.field}): ${email} | ${event.slug}`);
+        return res.status(409).json({
+          success: false,
+          code:    "ALREADY_REGISTERED",
+          field:   duplicate.field,
+          message: duplicateMessage(duplicate.field, event.title),
         });
       }
     }

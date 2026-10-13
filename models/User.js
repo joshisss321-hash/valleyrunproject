@@ -61,6 +61,10 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: true,
       trim: true,
+      // Duplicate registration check har order se pehle phone dhoondta hai.
+      // Unique NAHI — purane data mein ek number par ek se zyada account ho
+      // sakte hain, aur unique lagate hi wo saare save hona band ho jaate.
+      index: true,
     },
 
     // 📍 ADDRESS
