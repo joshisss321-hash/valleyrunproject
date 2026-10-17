@@ -14,24 +14,44 @@ const CATEGORIES = [
   { label: "21KM",    km: 21.0 },
 ];
 
+/* Cycling aur walking ki asli doorian.
+   ⚠️ Ye frontend ke lib/categories.js ki list se milni chahiye — wahan naya
+      option joda to yahan bhi jodiye, warna wo nazdeeki wali mein chala
+      jayega aur leaderboard par do doorian ek saath dikhengi. */
+const CYCLING_KM = [10, 25, 50, 60, 75, 85, 100];
+const WALKING_KM = [2, 5, 10, 21];
+
+/** String se number nikaal kar di gayi list mein sabse nazdeeki doori. */
+function nearestOf(s, list, fallback) {
+  const match = String(s).match(/(\d+(?:\.\d+)?)/);
+  if (!match) return fallback;
+
+  const num = parseFloat(match[1]);
+  if (isNaN(num)) return fallback;
+
+  return list.reduce(
+    (best, km) => (Math.abs(km - num) < Math.abs(best - num) ? km : best),
+    list[0]
+  );
+}
+
 function getNearestCategory(distStr) {
   if (!distStr) return null;
   const s = distStr.toLowerCase().trim();
 
-  // ✅ Cycling pehle check karo
-  if (s.includes("cycling")) {
-    if (s.includes("100")) return "CYCLING100KM";
-    if (s.includes("50"))  return "CYCLING50KM";
-    if (s.includes("25"))  return "CYCLING25KM";
-    return "CYCLING10KM";
+  /* ✅ Cycling pehle check karo.
+     Pehle yahan s.includes("50") jaisa substring match tha. Jab tak sirf
+     10/25/50/100 the tab chal gaya, par 60/75/85 jodte hi sab tootta:
+     "Cycling 60Km" mein na 100 hai, na 50, na 25 — to wo chupchaap
+     CYCLING10KM ban jaata. Ab number nikaal kar nazdeeki doori par bhejte
+     hain, jaise running mein hota hai. */
+  if (s.includes("cycl")) {
+    return `CYCLING${nearestOf(s, CYCLING_KM, 10)}KM`;
   }
 
-  // ✅ Walking check karo
+  // ✅ Walking check karo — wahi substring wali dikkat thi yahan bhi
   if (s.includes("walking") || s.includes("walk")) {
-    if (s.includes("21")) return "WALKING21KM";
-    if (s.includes("10")) return "WALKING10KM";
-    if (s.includes("5"))  return "WALKING5KM";
-    return "WALKING2KM";
+    return `WALKING${nearestOf(s, WALKING_KM, 2)}KM`;
   }
 
   // ✅ Running / default

@@ -38,7 +38,7 @@ A virtual running and cycling platform. Participants register, complete their ch
 **Registration**
 Pick an event, fill the form (name, email, phone, full delivery address, category), pay through Razorpay. Takes about two minutes. A confirmation email follows with the BIB number, which serves as the registration number. Medals ship to the address entered at registration, so tell people to check it carefully — Valley Run is not responsible for delays from a wrong address.
 
-Distances vary by event. Typically Running 1600m / 3.2K / 5K / 10K / 21K, Walking 2K / 5K / 10K / 21K, Cycling 10K / 25K / 50K / 100K. Always confirm what a specific event actually offers using the tool.
+Distances vary by event. Typically Running 1600m / 3.2K / 5K / 10K / 21K, Walking 2K / 5K / 10K / 21K, Cycling 10K / 25K / 50K / 60K / 75K / 85K / 100K. Always confirm what a specific event actually offers using the tool.
 
 Beginners are welcome. Anyone can register, and multiple family members can each register separately. Someone can register for more than one event. Registration after the deadline is not possible.
 
