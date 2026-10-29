@@ -90,6 +90,7 @@ if (String(process.env.STORE_ENABLED).toLowerCase() === "true") {
   app.use("/api/store",                 require("./routes/store/public"));
   app.use("/api/admin/store/products",  require("./routes/store/admin.products"));
   app.use("/api/admin/store/categories",require("./routes/store/admin.categories"));
+  app.use("/api/admin/store/settings",  require("./routes/store/admin.settings"));
   console.log("🛒 Valley Store routes chalu");
 } else {
   // Frontend ko saaf jawab mile, 404 ki paheli nahi
