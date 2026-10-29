@@ -80,6 +80,24 @@ app.use("/api/admin/users",          adminUsers);
 app.use("/api/admin/leaderboard",    adminLeaderboard);
 app.use("/api/admin",                adminRoutes);
 app.use("/api/admin/reviews", adminReviews);
+
+/* ── VALLEY STORE ──
+   Ek switch ke peeche. STORE_ENABLED=false karte hi poora store bandh,
+   aur Valley Run (events, registration, medal) jyon ka tyon chalta rehta
+   hai — na koi route hatana padta hai, na deploy palatna padta hai.
+   Default band hai: galti se aadha-adhura store live na ho jaye. */
+if (String(process.env.STORE_ENABLED).toLowerCase() === "true") {
+  app.use("/api/store",                 require("./routes/store/public"));
+  app.use("/api/admin/store/products",  require("./routes/store/admin.products"));
+  app.use("/api/admin/store/categories",require("./routes/store/admin.categories"));
+  console.log("🛒 Valley Store routes chalu");
+} else {
+  // Frontend ko saaf jawab mile, 404 ki paheli nahi
+  app.use("/api/store", (_req, res) =>
+    res.status(503).json({ success: false, code: "STORE_DISABLED", message: "The store is not open yet." })
+  );
+}
+
 /* ── 404 ── */
 app.use((_req, res) =>
   res.status(404).json({ success: false, message: "Route not found" })
