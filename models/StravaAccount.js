@@ -12,9 +12,12 @@ const stravaAccountSchema = new mongoose.Schema(
        scan hota. */
     athleteId: { type: String, required: true, unique: true, index: true },
 
-    accessToken:  { type: String, required: true },
-    refreshToken: { type: String, required: true },
-    expiresAt:    { type: Date,   required: true },   // access token kab tak
+    /* required NAHI: disconnect par ye jaan-bujh kar khali kar dete hain.
+       Required rakhne par disconnect hi fail ho jaata tha aur token
+       database mein pada rehta — wo galat bhi hai aur khatarnak bhi. */
+    accessToken:  { type: String, default: "" },
+    refreshToken: { type: String, default: "" },
+    expiresAt:    { type: Date,   default: null },   // access token kab tak
 
     scope:       { type: String, default: "" },
     athleteName: { type: String, default: "" },

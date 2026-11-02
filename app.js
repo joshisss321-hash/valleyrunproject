@@ -69,6 +69,7 @@ app.use("/api/auth",    authUserRoutes);
 app.use("/api/profile", profileRoutes);
 app.use("/api/coupon",  couponRoutes);
 app.use("/api/chat",    chatRoutes);
+app.use("/api/strava",  require("./routes/strava.routes"));
 
 /* ── ADMIN ── */
 app.use("/api/admin/events",         adminEvents);
