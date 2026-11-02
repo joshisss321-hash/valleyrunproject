@@ -21,7 +21,56 @@ const {
   REWARD_MAX_PERCENT,
 } = require("../utils/referral");
 
+const StreakEnrollment = require("../models/StreakEnrollment");
+const StravaAccount    = require("../models/StravaAccount");
+const { streakState, dayGrid } = require("../utils/streak");
+
 const SITE_URL = process.env.SITE_URL || "https://valleyrun.in";
+
+/* Runner ke saare streak challenges — calendar ke saath.
+   Hisaab utils/streak.js karta hai, yahan sirf shakal banti hai, taaki
+   profile aur admin kabhi alag ginti na dikhayein. */
+const loadStreaks = async (user) => {
+  const rows = await StreakEnrollment.find({ user: user._id })
+    .populate("event", "title slug medalImage coverImage image")
+    .sort({ createdAt: -1 })
+    .lean();
+
+  return rows.map((e) => ({
+    _id:         e._id,
+    eventSlug:   e.eventSlug,
+    eventTitle:  e.event?.title || "",
+    eventImage:  e.event?.coverImage || e.event?.image || "",
+    optionLabel: e.optionLabel,
+
+    minMinutes:    e.minMinutes,
+    allowedSports: e.allowedSports,
+    outdoorOnly:   e.outdoorOnly,
+    source:        e.source,
+
+    ...streakState(e),
+    grid: dayGrid(e),
+
+    certificateSent: Boolean(e.certificateSentAt),
+    lastSyncAt:      e.lastSyncAt,
+  }));
+};
+
+/* Strava juda hai ya nahi — token kabhi bahar nahi jaata */
+const loadStravaStatus = async (user) => {
+  const acc = await StravaAccount.findOne({ user: user._id }).lean();
+  if (!acc || acc.disconnectedAt) {
+    return { connected: false };
+  }
+  return {
+    connected:   true,
+    athleteName: acc.athleteName || "",
+    athletePhoto: acc.athletePhoto || "",
+    connectedAt: acc.connectedAt,
+    lastSyncAt:  acc.lastSyncAt,
+    needsReconnect: (acc.refreshFailures || 0) >= 3,
+  };
+};
 
 /* ═══════════════════════════════════════════════════════════
    MEDAL TIMELINE — Amazon/Flipkart style stages
@@ -263,6 +312,8 @@ router.get("/", protectUser, async (req, res) => {
       stats,
       coachTip,
       events,
+      streaks: await loadStreaks(user),
+      strava: await loadStravaStatus(user),
       referral: {
         code: user.referralCode,
         link: `${SITE_URL}?ref=${user.referralCode}`,

@@ -35,6 +35,32 @@ const eventSchema = new mongoose.Schema(
     // ── Categories ──────────────────────────────────────────
     categories: { type: [String], default: ["5km", "10km", "21km"] },
 
+    /* ── Challenge kis tarah ka hai ──
+       "distance" = purana wala: ek baar doori poori karo, proof bhejo.
+       "streak"   = roz ki aadat: window mein itne din activity karo.
+
+       Default "distance" hai, isliye saare purane events jaise the waise
+       hi rehte hain — na koi migration, na koi behaviour badla. */
+    challengeType: { type: String, enum: ["distance", "streak"], default: "distance" },
+
+    /* Streak ke options — user inme se ek chunta hai.
+       Ye seedha `categories` ki jagah lete hain, isliye registration,
+       payment aur coupon ka raasta bilkul wahi rehta hai. */
+    streakOptions: {
+      type: [{
+        _id:        false,
+        label:      { type: String, required: true },  // "21 of 24"
+        goalDays:   { type: Number, required: true },  // 21
+        windowDays: { type: Number, required: true },  // 24
+      }],
+      default: [],
+    },
+
+    streakMinMinutes:  { type: Number,  default: 30 },
+    streakSports:      { type: [String], default: ["Run", "Walk", "Ride", "Hike"] },
+    streakOutdoorOnly: { type: Boolean, default: true },
+    streakSource:      { type: String, enum: ["strava", "manual", "both"], default: "both" },
+
     // ── Status flags ────────────────────────────────────────
     active:             { type: Boolean, default: true },
     isPrevious:         { type: Boolean, default: false },

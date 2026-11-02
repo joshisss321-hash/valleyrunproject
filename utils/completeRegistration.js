@@ -71,6 +71,18 @@ const completeRegistration = async ({
     });
   }
 
+  /* Streak challenge hai to enrollment bana do — window aaj hi tay ho
+     jaana chahiye. Fail ho jaye to bhi registration surakshit hai: paisa
+     kat chuka hai, aur enrollment baad mein ban sakti hai. */
+  if (event.challengeType === "streak") {
+    try {
+      const { createStreakEnrollment } = require("./streakEnroll");
+      await createStreakEnrollment({ user, event, registration, optionLabel: category });
+    } catch (err) {
+      console.error("❌ Streak enrollment nahi bani:", user.email, event.slug, err.message);
+    }
+  }
+
   if (referrerId) {
     // Is user ko permanently mark karo — ek hi baar referral discount milta hai
     if (!user.referredBy) {
