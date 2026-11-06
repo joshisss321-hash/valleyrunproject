@@ -70,6 +70,7 @@ app.use("/api/profile", profileRoutes);
 app.use("/api/coupon",  couponRoutes);
 app.use("/api/chat",    chatRoutes);
 app.use("/api/strava",  require("./routes/strava.routes"));
+app.use("/api/stories", require("./routes/stories.public"));
 
 /* ── ADMIN ── */
 app.use("/api/admin/events",         adminEvents);
@@ -81,6 +82,7 @@ app.use("/api/admin/users",          adminUsers);
 app.use("/api/admin/leaderboard",    adminLeaderboard);
 app.use("/api/admin",                adminRoutes);
 app.use("/api/admin/reviews", adminReviews);
+app.use("/api/admin/stories", require("./routes/admin.stories"));
 
 /* ── VALLEY STORE ──
    Ek switch ke peeche. STORE_ENABLED=false karte hi poora store bandh,
