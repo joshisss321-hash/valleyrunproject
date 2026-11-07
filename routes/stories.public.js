@@ -39,6 +39,7 @@ const publicStory = (s) => ({
 
   eventTitle: s.eventTitle || "",
   badge: s.badge || "",
+  category: s.category || "",
   publishedAt: s.publishedAt,
 
   seoTitle:       s.seoTitle || s.title,
@@ -60,14 +61,29 @@ router.get("/", async (req, res) => {
       removalRequestedAt: null,
     };
 
+    // ?category=running_journey — anjaan value aaye to nazarandaz,
+    // warna galat link par page khali dikhta hai
+    const cat = String(req.query.category || "");
+    if (cat && Story.CATEGORIES.includes(cat) && cat !== "") filter.category = cat;
+
     const [rows, total] = await Promise.all([
       Story.find(filter).sort({ publishedAt: -1 }).skip((page - 1) * limit).limit(limit),
       Story.countDocuments(filter),
     ]);
 
+    /* Filter ki patti ke liye: kaunsi categories mein sach mein kahani
+       hai. Khali category ka chip dikhana bekaar hai. */
+    const counts = await Story.aggregate([
+      { $match: { status: "published", "consent.publishStory": true, removalRequestedAt: null } },
+      { $group: { _id: "$category", n: { $sum: 1 } } },
+    ]);
+
     res.json({
       success: true,
       stories: rows.map(publicStory),
+      categories: counts
+        .filter((c) => c._id)
+        .map((c) => ({ key: c._id, count: c.n })),
       total, page, totalPages: Math.ceil(total / limit),
     });
   } catch (err) {
@@ -125,6 +141,9 @@ router.get("/settings", async (_req, res) => {
       settings: {
         submissionsOpen: s.submissionsOpen,
         submitIntro:     s.submitIntro,
+        pageHeroImage:   s.pageHeroImage,
+        pageHeroHeading: s.pageHeroHeading,
+        pageHeroText:    s.pageHeroText,
         consentText:     s.consentText,
       },
     });

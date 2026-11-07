@@ -7,6 +7,19 @@ const mongoose = require("mongoose");
 const BADGES = ["", "featured", "story_of_week", "community_inspiration", "journey_of_month"];
 const STATUS = ["pending", "approved", "published", "rejected"];
 
+/* Kahani ki kism. "" = jab admin ne abhi tay nahi kiya — aisi kahani
+   bhi list mein rehti hai, bas kisi filter ke neeche nahi aati. */
+const CATEGORIES = [
+  "",
+  "running_journey",
+  "fitness_transformation",
+  "beginner_story",
+  "walking_journey",
+  "cycling_journey",
+  "overcoming_challenges",
+  "personal_achievement",
+];
+
 const storySchema = new mongoose.Schema(
   {
     /* ── Kisne bheji ── */
@@ -56,6 +69,11 @@ const storySchema = new mongoose.Schema(
 
     /* ── Badge ── */
     badge: { type: String, enum: BADGES, default: "" },
+
+    /* Kis tarah ki kahani — page par filter ke liye.
+       Khali chhodna theek hai; filter mein wo kahani sirf "All" ke
+       neeche aayegi, gayab nahi hogi. */
+    category: { type: String, enum: CATEGORIES, default: "" },
 
     /* ── Homepage par ──
        Admin tay karta hai. Koi "apne aap chun lo" nahi — spec bhi yahi
@@ -118,8 +136,10 @@ storySchema.methods.isWeeklyNow = function (now = new Date()) {
 };
 
 storySchema.statics.BADGES = BADGES;
+storySchema.statics.CATEGORIES = CATEGORIES;
 storySchema.statics.STATUS = STATUS;
 
 module.exports = mongoose.model("Story", storySchema);
 module.exports.BADGES = BADGES;
+module.exports.CATEGORIES = CATEGORIES;
 module.exports.STATUS = STATUS;
