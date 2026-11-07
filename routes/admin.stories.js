@@ -1,12 +1,63 @@
 const express = require("express");
 const router = express.Router();
+const multer = require("multer");
+const fs = require("fs");
+const sharp = require("sharp");
+const ImageKit = require("imagekit");
 
 const { protect } = require("../middleware/auth");
 const Story = require("../models/Story");
 const StorySettings = require("../models/StorySettings");
 const { slugify, uniqueSlug } = require("../utils/store/orderNo");
 
+const imagekit = new ImageKit({
+  publicKey:   process.env.IMAGEKIT_PUBLIC_KEY,
+  privateKey:  process.env.IMAGEKIT_PRIVATE_KEY,
+  urlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT,
+});
+
+const upload = multer({ dest: "uploads/", limits: { fileSize: 15 * 1024 * 1024 } });
+
 router.use(protect);
+
+/* ═══════════════════════════════════════════════
+   POST /hero-image  — /stories page ka hero photo
+
+   ⚠️ /:id waale routes se PEHLE rakha hai.
+   Ye photo poori screen par background banta hai, isliye 8 MB ka
+   original seedha chadha dena page ko bhaari kar deta hai. Yahan
+   2400px tak chhota karke jpeg 82 par daal dete hain — dikhne mein
+   farq nahi padta, load hone mein padta hai.
+═══════════════════════════════════════════════ */
+router.post("/hero-image", upload.single("image"), async (req, res) => {
+  const cleanup = () => {
+    if (req.file?.path && fs.existsSync(req.file.path)) {
+      try { fs.unlinkSync(req.file.path); } catch {}
+    }
+  };
+
+  try {
+    if (!req.file) return res.status(400).json({ success: false, message: "No file uploaded" });
+
+    const buf = await sharp(req.file.path)
+      .resize(2400, 1600, { fit: "inside", withoutEnlargement: true })
+      .jpeg({ quality: 82 })
+      .toBuffer();
+
+    const up = await imagekit.upload({
+      file: buf,
+      fileName: `stories_hero_${Date.now()}.jpg`,
+      folder: "/valleyrun/stories",
+    });
+    cleanup();
+
+    res.json({ success: true, url: up.url });
+  } catch (err) {
+    cleanup();
+    console.error("stories hero upload:", err.message);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
 
 /* ═══════════════════════════════════════════════
    GET /  — tabs ke hisaab se list
@@ -78,6 +129,7 @@ router.get("/settings", async (_req, res) => {
 const SETTING_FIELDS = [
   "sectionEnabled", "heading", "tagline", "whenEmpty", "fallbackText",
   "submissionsOpen", "submitIntro", "consentText", "notifyEmails",
+  "pageHeroImage", "pageHeroHeading", "pageHeroText",
 ];
 
 router.put("/settings", async (req, res) => {
@@ -106,7 +158,7 @@ router.get("/:id", async (req, res) => {
 const EDITABLE = [
   "title", "summary", "body", "photos", "featuredPhoto",
   "eventSlug", "eventTitle", "seoTitle", "seoDescription",
-  "city", "state", "instaId", "adminNote",
+  "city", "state", "instaId", "adminNote", "category",
 ];
 
 router.put("/:id", async (req, res) => {

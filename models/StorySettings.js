@@ -9,6 +9,23 @@ const storySettingsSchema = new mongoose.Schema(
     key: { type: String, default: "stories", unique: true },
 
     sectionEnabled: { type: Boolean, default: false },  // default BAND
+
+    /* /stories page ka hero.
+       Photo admin upload karega. Main wo photo bana nahi sakta, aur
+       koi stock photo daal dena brand ke saath dhokha hoga — isliye
+       jagah banayi hai, photo nahi. Khali rahe to page khud ek saaf
+       dark hero dikha deta hai, toota hua nahi lagta. */
+    pageHeroImage:   { type: String, default: "" },
+
+    /* "|" jahan hai wahan nayi line shuru hoti hai aur uske baad ka
+       hissa laal ho jaata hai. */
+    pageHeroHeading: { type: String, default: "Beyond the | Finish Line." },
+    pageHeroText: {
+      type: String,
+      default:
+        "Behind every medal is a journey of dedication, determination, challenges " +
+        "and small victories. Discover the real people and the miles behind them.",
+    },
     heading: { type: String, default: "This Week's Inspiring Journey" },
     tagline: { type: String, default: "One story. One journey. Endless inspiration." },
 
