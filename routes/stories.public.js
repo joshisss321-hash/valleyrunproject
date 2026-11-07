@@ -62,6 +62,7 @@ const publicStory = (s) => ({
   slug:  s.slug,
   summary: s.summary,
   body:  s.body,
+  pullQuote: s.pullQuote || "",
 
   /* Naam tabhi jab usne naam chhapne ki ijazat di ho.
      Nahi di to kahani chhapegi, naam nahi. */

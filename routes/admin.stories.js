@@ -158,8 +158,21 @@ router.get("/:id", async (req, res) => {
 const EDITABLE = [
   "title", "summary", "body", "photos", "featuredPhoto",
   "eventSlug", "eventTitle", "seoTitle", "seoDescription",
-  "city", "state", "instaId", "adminNote", "category",
+  "city", "state", "instaId", "adminNote", "category", "pullQuote",
 ];
+
+/* Do texts ko "ek jaisa" maanne ke liye unhe barabar kar lete hain:
+   curly quotes seedhe, dash saadhe, kai spaces ek, chhota-bada ek
+   jaisa. Warna admin ne jo line copy ki, wo sirf ek tedhe apostrophe
+   ki wajah se "kahani mein nahi hai" ban jaati. */
+const flatten = (t) =>
+  String(t || "")
+    .replace(/[‘’‛ʼ]/g, "'")
+    .replace(/[“”‟]/g, '"')
+    .replace(/[–—−]/g, "-")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
 
 router.put("/:id", async (req, res) => {
   try {
@@ -167,6 +180,24 @@ router.put("/:id", async (req, res) => {
     if (!story) return res.status(404).json({ success: false, message: "Story not found" });
 
     for (const k of EDITABLE) if (req.body[k] !== undefined) story[k] = req.body[k];
+
+    /* ⚠️ Quote kahani ke andar se hi aa sakta hai.
+       Admin se galti ho sakti hai — apni yaad se line likh dena,
+       ya kisi aur kahani se chipka dena. Server rok deta hai: jo
+       runner ne nahi kaha, wo uske naam par bade akshar mein nahi
+       chhapega. */
+    if (story.pullQuote) {
+      const line = flatten(story.pullQuote);
+      if (!flatten(story.body).includes(line)) {
+        return res.status(400).json({
+          success: false,
+          code: "QUOTE_NOT_IN_STORY",
+          message:
+            "That line is not in the story. Copy the sentence exactly as the runner wrote it — " +
+            "we never put words in someone's mouth.",
+        });
+      }
+    }
 
     /* Slug tabhi badlo jab admin khud kahe — publish ke baad badalne par
        jo link log share kar chuke hain wo toot jaate hain. */

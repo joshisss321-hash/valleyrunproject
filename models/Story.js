@@ -37,6 +37,13 @@ const storySchema = new mongoose.Schema(
     summary: { type: String, default: "" },     // card aur share par
     body:    { type: String, required: true },
 
+    /* Kahani ke beech mein ubhaar kar dikhane wali ek line.
+       ⚠️ Ye hamesha kahani ke ANDAR se hi aati hai — admin chunta
+       hai, likhta nahi. Server bhi yahi jaanchta hai. Kisi ke naam
+       par wo baat chhapna jo usne kahi hi nahi, sabse badi galti
+       hogi. */
+    pullQuote: { type: String, default: "" },
+
     photos: {
       type: [{ _id: false, url: String, caption: { type: String, default: "" } }],
       default: [],
