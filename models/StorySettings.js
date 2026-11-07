@@ -46,9 +46,8 @@ const storySettingsSchema = new mongoose.Schema(
     consentText: {
       type: String,
       default:
-        "I confirm this story is my own, and I give Valley Run permission to publish it " +
-        "along with the photographs I have uploaded. I understand it may appear on the " +
-        "Valley Run website and social media, and that I can ask for it to be removed at any time.",
+        "I confirm that this is my personal story and give Valley Run permission to " +
+        "review and publish my submitted story and photographs if selected.",
     },
 
     notifyEmails: { type: [String], default: [] },   // nayi kahani par kise batayein

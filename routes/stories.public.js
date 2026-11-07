@@ -7,6 +7,7 @@ const ImageKit = require("imagekit");
 
 const Story = require("../models/Story");
 const StorySettings = require("../models/StorySettings");
+const Event = require("../models/Event");
 const { slugify, uniqueSlug } = require("../utils/store/orderNo");
 
 const imagekit = new ImageKit({
@@ -15,7 +16,44 @@ const imagekit = new ImageKit({
   urlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT,
 });
 
-const upload = multer({ dest: "uploads/", limits: { fileSize: 10 * 1024 * 1024 } });
+/* Photo: 3 se zyada nahi, 8 MB se bhari nahi, aur sirf asli image
+   formats. Pehle kuch bhi "image/*" chalta tha — HEIC aur TIFF bhi,
+   jinhe sharp har server par nahi khol pata, aur tab 500 aata tha
+   bina ye bataye ki galti kya hui. */
+const ALLOWED = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+
+const upload = multer({
+  dest: "uploads/",
+  limits: { fileSize: 8 * 1024 * 1024, files: 3 },
+  fileFilter: (_req, file, cb) => {
+    if (ALLOWED.includes(String(file.mimetype).toLowerCase())) return cb(null, true);
+    const err = new Error("Only JPG, PNG and WebP photos can be uploaded.");
+    err.code = "BAD_IMAGE_TYPE";
+    cb(err);
+  },
+});
+
+/* Bahut lambi kahani galti se nahi aati — copy-paste ya script se
+   aati hai. Itni jagah mein 10,000 shabd aa jaate hain. */
+const MAX_BODY    = 60000;
+const MAX_TITLE   = 160;
+const MAX_SUMMARY = 300;
+
+/* multer ki apni galtiyan (bada file, galat type) warna 500 ban kar
+   nikalti hain aur user ko kuch samajh nahi aata. */
+const photoUpload = (req, res, next) =>
+  upload.array("photos", 3)(req, res, (err) => {
+    if (!err) return next();
+
+    const message =
+      err.code === "BAD_IMAGE_TYPE"    ? err.message
+      : err.code === "LIMIT_FILE_SIZE" ? "Each photo must be 8 MB or smaller."
+      : err.code === "LIMIT_FILE_COUNT" || err.code === "LIMIT_UNEXPECTED_FILE"
+                                       ? "You can upload up to 3 photos."
+      : "Could not read the photos you uploaded.";
+
+    res.status(400).json({ success: false, message });
+  });
 
 /* Public ko kahani ka saaf roop — email, phone, admin note kabhi bahar nahi */
 const publicStory = (s) => ({
@@ -30,7 +68,9 @@ const publicStory = (s) => ({
   name: s.consent?.publishName ? s.name : "A Valley Run runner",
   city: s.consent?.publishName ? s.city : "",
   state: s.consent?.publishName ? s.state : "",
-  instaId: s.consent?.publishName ? s.instaId : "",
+  /* Instagram ki apni alag haan chahiye — naam dikhane ki ijazat se
+     ye nahi chalti. */
+  instaId: s.consent?.publishInsta ? s.instaId : "",
 
   /* Photo tabhi jab photo ki alag ijazat ho — kahani ki haan ka matlab
      photo ki haan nahi hai. */
@@ -131,6 +171,30 @@ router.get("/homepage", async (_req, res) => {
 });
 
 /* ═══════════════════════════════════════════════
+   GET /api/stories/event-options
+   Submit form ke dropdown ke liye.
+
+   ⚠️ Yahan /api/events istemaal NAHI kiya ja sakta: wo sirf
+   `active: true` events deta hai. Kahani hamesha guzre hue challenge
+   ki hoti hai, aur purane challenge band kar diye jaate hain — Heart
+   Day ke saath yahi hua tha. Us list se runner ko apna hi event nahi
+   milta. Isliye saare events, naya pehle.
+═══════════════════════════════════════════════ */
+router.get("/event-options", async (_req, res) => {
+  try {
+    const rows = await Event.find({}, "title slug").sort({ createdAt: -1 }).lean();
+    res.json({
+      success: true,
+      events: rows.filter((e) => e.title).map((e) => ({ title: e.title, slug: e.slug || "" })),
+    });
+  } catch (err) {
+    // Dropdown na bhi mile to form chalna chahiye — khali list bhej do
+    console.error("story event options:", err.message);
+    res.json({ success: true, events: [] });
+  }
+});
+
+/* ═══════════════════════════════════════════════
    GET /api/stories/settings  — submit form ke liye
 ═══════════════════════════════════════════════ */
 router.get("/settings", async (_req, res) => {
@@ -158,7 +222,7 @@ router.get("/settings", async (_req, res) => {
    ⚠️ Consent ke bina kuch save nahi hota. Ye marzi ki baat nahi:
       kisi ki kahani bina ijazat ke rakhna hi galat hai.
 ═══════════════════════════════════════════════ */
-router.post("/", upload.array("photos", 5), async (req, res) => {
+router.post("/", photoUpload, async (req, res) => {
   const cleanup = () => {
     (req.files || []).forEach((f) => {
       if (f?.path && fs.existsSync(f.path)) { try { fs.unlinkSync(f.path); } catch {} }
@@ -172,16 +236,40 @@ router.post("/", upload.array("photos", 5), async (req, res) => {
       return res.status(400).json({ success: false, message: "Story submissions are closed right now." });
     }
 
-    const { name, email, phone, city, state, instaId, title, summary, body, eventSlug, eventTitle } = req.body;
+    const { name, email, phone, city, state, title, summary, body, eventSlug, eventTitle } = req.body;
+
+    /* @ ke saath ya bina — dono tarah log likhte hain. Save hamesha
+       bina @ ke, warna link banate waqt @@ ban jaata hai. */
+    const instaId = String(req.body.instaId || "").trim().replace(/^@+/, "");
 
     const yes = (v) => v === true || v === "true" || v === "1" || v === "on";
     const consentStory  = yes(req.body.consentStory);
     const consentPhotos = yes(req.body.consentPhotos);
     const consentName   = yes(req.body.consentName);
+    const consentInsta  = yes(req.body.consentInsta) && Boolean(instaId);
 
     if (!name || !email || !title || !body) {
       cleanup();
       return res.status(400).json({ success: false, message: "Name, email, title and your story are all required." });
+    }
+
+    /* Hadd se bahar lamba text. Ye galti se nahi hota — isliye saaf
+       mana kar dete hain, chup-chaap kaat kar aadhi kahani save karne
+       se behtar hai. */
+    if (String(body).length > MAX_BODY) {
+      cleanup();
+      return res.status(400).json({
+        success: false,
+        message: "Your story is longer than we can accept. Please shorten it a little and try again.",
+      });
+    }
+    if (String(title).length > MAX_TITLE) {
+      cleanup();
+      return res.status(400).json({ success: false, message: `Please keep the title under ${MAX_TITLE} characters.` });
+    }
+    if (String(summary || "").length > MAX_SUMMARY) {
+      cleanup();
+      return res.status(400).json({ success: false, message: `Please keep the one-line description under ${MAX_SUMMARY} characters.` });
     }
 
     if (!consentStory) {
@@ -229,6 +317,7 @@ router.post("/", upload.array("photos", 5), async (req, res) => {
         publishStory:  consentStory,
         publishPhotos: consentPhotos,
         publishName:   consentName,
+        publishInsta:  consentInsta,
         agreedAt:      new Date(),
         // Jo text unhone sach mein dekha, wahi save — baad mein settings
         // badlein to bhi inka record waisa hi rahega

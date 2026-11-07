@@ -56,6 +56,12 @@ const storySchema = new mongoose.Schema(
       publishStory:  { type: Boolean, default: false },
       publishPhotos: { type: Boolean, default: false },
       publishName:   { type: Boolean, default: false },
+
+      /* Instagram alag se poochha jaata hai. Kisi ka handle chhapna
+         matlab log seedha uske niji account par pahunch jaayenge —
+         kahani chhapne ki haan ka matlab ye nahi hai. */
+      publishInsta:  { type: Boolean, default: false },
+
       agreedAt:      { type: Date,   default: null },
       agreedText:    { type: String, default: "" },   // hu-ba-hu wahi text
     },
