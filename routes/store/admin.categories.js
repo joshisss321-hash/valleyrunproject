@@ -86,7 +86,7 @@ router.delete("/:id", async (req, res) => {
     if (used > 0) {
       return res.status(400).json({
         success: false,
-        message: `Is category mein ${used} product hain. Pehle unhe kisi aur category mein daliye, ya category ko unpublish kar dijiye.`,
+        message: `This category holds ${used} product${used === 1 ? "" : "s"}. Move them to another category first, or unpublish this category.`,
       });
     }
 

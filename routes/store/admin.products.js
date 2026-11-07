@@ -208,7 +208,7 @@ router.delete("/:id", async (req, res) => {
       return res.json({
         success: true,
         archived: true,
-        message: "Is product ke orders ho chuke hain, isliye hataya nahi — band kar diya gaya hai.",
+        message: "This product has orders, so it was unpublished instead of deleted.",
       });
     }
 

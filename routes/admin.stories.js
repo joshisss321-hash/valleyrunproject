@@ -305,7 +305,7 @@ router.delete("/:id", async (req, res) => {
       return res.json({
         success: true,
         archived: true,
-        message: "Ye kahani publish ho chuki thi, isliye hataya nahi — public se nikal di gayi hai.",
+        message: "This story had been published, so it was taken off the site instead of deleted.",
       });
     }
 
