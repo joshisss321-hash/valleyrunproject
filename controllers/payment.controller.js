@@ -17,6 +17,71 @@ const razorpay = new Razorpay({
   key_secret: process.env.RAZORPAY_KEY_SECRET,
 });
 
+/* ── Marketing attribution ko order ke saath baandhna ───────────
+   Razorpay ke notes mein kyun nahi? Wahan sirf 15 key allowed hain
+   aur hum pehle se 13 use kar rahe hain — isi wajah se coupon ki
+   teen cheezein `promo` mein pack ki hui hain. Ek aur cheez
+   thoosna us nazuk hisaab ko tod sakta tha. Isliye apni collection,
+   order id se judi.
+
+   ⚠️ Ye function kabhi throw nahi karta aur iska intezaar bhi nahi
+   kiya jaata. Order ban chuka hota hai jab ye chalta hai.          */
+const saveOrderAttribution = async ({ orderId, token, event, payable }) => {
+  try {
+    const A = require("../utils/attribution");
+    if (!A.isEnabled()) return;
+
+    const data = A.verifyToken(token);
+    if (!data || !data.firstTouchSource) return;
+
+    const OrderAttribution = require("../models/OrderAttribution");
+
+    /* ── Event ka milaan ──
+       Navy Day ka link khola par registration kisi aur event mein
+       ki — to Navy Day wale influencer ko credit NAHI milega. Par
+       source/medium/campaign phir bhi save hoga, kyunki wo baat to
+       sach hai ki banda Instagram se aaya tha. */
+    const linked = (data.eventIdsSnap || []).map(String);
+    const eventOk = data.influencerId && linked.includes(String(event._id));
+
+    /* ⚠️ Iska intezaar karna ZAROORI hai.
+       Pehle ye fire-and-forget tha aur test mein pakda gaya: UPI se
+       turant payment karne par verify-payment is write se pehle
+       pahunch jaata tha, aur registration bina attribution ke ban
+       jaati thi. Order to ban hi chuka hai; ek chhote upsert ka
+       intezaar karne mein kuch nahi jaata. */
+    await OrderAttribution.updateOne(
+      { orderId },
+      {
+        $set: {
+          orderId,
+          influencer: eventOk ? data.influencerId : null,
+          code:       eventOk ? (data.code || "") : "",
+          event:      event._id,
+          eventSlug:  event.slug || "",
+          source:     data.source   || "",
+          medium:     data.medium   || "",
+          campaign:   data.campaign || "",
+          content:    data.content  || "",
+          term:       data.term     || "",
+          firstTouchSource:   data.firstTouchSource   || "",
+          firstTouchMedium:   data.firstTouchMedium   || "",
+          firstTouchCampaign: data.firstTouchCampaign || "",
+          lastTouchSource:    data.lastTouchSource    || "",
+          lastTouchMedium:    data.lastTouchMedium    || "",
+          lastTouchCampaign:  data.lastTouchCampaign  || "",
+          payable:    Number(payable) || 0,
+        },
+      },
+      { upsert: true }
+    );
+  } catch (err) {
+    /* Attribution ki koi bhi gadbad order ko nahi rok sakti —
+       isiliye yahan sirf log, aur caller aage badh jaata hai. */
+    console.error("attribution save:", err.message);
+  }
+};
+
 /* ===============================
    CREATE ORDER
    ✅ FIX: notes mein poora form data
@@ -154,6 +219,23 @@ const createOrder = async (req, res) => {
         source:    source    || "",
         promo:     encodePromo({ couponCode: appliedCoupon, discount, referrerId }),
       },
+    });
+
+    /* ── Marketing attribution ──────────────────────────────────
+       Client ne ek signed token bheja hai jo humne hi banaya tha.
+       Usme influencer ki id hai — par client ne wo id nahi bheji,
+       aur token ka ek akshar badla to signature fail ho jaata hai.
+       Isiliye koi apne aap ko kisi influencer ka laaya hua nahi
+       bata sakta.
+
+       ⚠️ Poora block try/catch mein hai aur order ke BAAD chalta
+       hai. Order ban chuka hai; ginti ki koi gadbad use nahi rok
+       sakti.                                                       */
+    await saveOrderAttribution({
+      orderId: order.id,
+      token:   req.body.attributionToken,
+      event,
+      payable,
     });
 
     return res.json({

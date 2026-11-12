@@ -72,11 +72,18 @@ app.use("/api/chat",    chatRoutes);
 app.use("/api/strava",  require("./routes/strava.routes"));
 app.use("/api/stories", require("./routes/stories.public"));
 
+/* Marketing attribution — Next.js ka route handler isse bulata hai.
+   Sirf ek signed token wapas karta hai; kuch public expose nahi hota. */
+app.use("/api/track",   require("./routes/marketing.public"));
+
 /* ── ADMIN ── */
 app.use("/api/admin/events",         adminEvents);
 app.use("/api/admin/submissions",    adminSubmissions);
 app.use("/api/admin/registrations",  adminRegistrations);
 app.use("/api/admin/tracking",       adminTracking);
+/* ⚠️ Bare "/api/admin" (adminStats, adminRoutes) se PEHLE — warna
+   unka koi /:param route isse pehle match kar sakta hai. */
+app.use("/api/admin/marketing",      require("./routes/admin.marketing"));
 app.use("/api/admin",                adminStats);
 app.use("/api/admin/users",          adminUsers);
 app.use("/api/admin/leaderboard",    adminLeaderboard);
