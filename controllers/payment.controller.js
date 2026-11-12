@@ -36,13 +36,33 @@ const saveOrderAttribution = async ({ orderId, token, event, payable }) => {
 
     const OrderAttribution = require("../models/OrderAttribution");
 
-    /* ── Event ka milaan ──
-       Navy Day ka link khola par registration kisi aur event mein
-       ki — to Navy Day wale influencer ko credit NAHI milega. Par
-       source/medium/campaign phir bhi save hoga, kyunki wo baat to
-       sach hai ki banda Instagram se aaya tha. */
-    const linked = (data.eventIdsSnap || []).map(String);
-    const eventOk = data.influencerId && linked.includes(String(event._id));
+    /* ── Influencer ko YAHAN dobara jaanchte hain, ABHI ke record se ──
+
+       Token mein jo likha tha wo CLICK ke waqt ka sach hai, aur
+       click aur payment ke beech 30 din tak ka faasla ho sakta hai.
+       Us beech mein:
+         • influencer band kiya ja sakta hai — to use naya credit
+           nahi milna chahiye (uska purana hisaab waise ka waisa
+           rehta hai),
+         • uske events badle ja sakte hain — nikala gaya event
+           credit na de, aur naya joda gaya event de.
+
+       Pehle yahan token ka purana snapshot use hota tha, jisse
+       dono galtiyan ho sakti thi. Ab database se abhi ka sach. */
+    let eventOk = false;
+
+    if (data.influencerId) {
+      const Influencer = require("../models/Influencer");
+      const live = await Influencer.findById(data.influencerId)
+        .select("isActive eventIds")
+        .lean();
+
+      eventOk = Boolean(
+        live &&
+        live.isActive &&
+        (live.eventIds || []).some((id) => String(id) === String(event._id))
+      );
+    }
 
     /* ⚠️ Iska intezaar karna ZAROORI hai.
        Pehle ye fire-and-forget tha aur test mein pakda gaya: UPI se
