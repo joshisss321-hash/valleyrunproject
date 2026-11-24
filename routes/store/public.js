@@ -27,7 +27,9 @@ router.get("/products", async (req, res) => {
     const page = Math.max(1, num(req.query.page, 1));
     const limit = Math.min(60, Math.max(1, num(req.query.limit, 24)));
 
-    const filter = { isPublished: true };
+    /* `$ne: "medal"` — `kind: "store"` NAHI. Purane products mein ye
+       field hai hi nahi, to barabari wala filter unhe gayab kar deta. */
+    const filter = { isPublished: true, kind: { $ne: "medal" } };
 
     if (category) {
       const cat = await StoreCategory.findOne({ slug: category, isPublished: true })
@@ -96,7 +98,7 @@ router.get("/products", async (req, res) => {
 ═══════════════════════════════════════════════════ */
 router.get("/products/:slug", async (req, res) => {
   try {
-    const p = await StoreProduct.findOne({ slug: req.params.slug, isPublished: true })
+    const p = await StoreProduct.findOne({ slug: req.params.slug, isPublished: true, kind: { $ne: "medal" } })
       .populate("categories", "name slug")
       .lean();
 
@@ -108,6 +110,7 @@ router.get("/products/:slug", async (req, res) => {
       ? await StoreProduct.find({
           _id: { $ne: p._id },
           isPublished: true,
+          kind: { $ne: "medal" },
           categories: { $in: catIds },
         }).limit(8).lean()
       : [];

@@ -78,7 +78,9 @@ router.get("/", async (req, res) => {
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 25));
 
-    const filter = {};
+    /* Medal Store ke products yahan nahi — unka apna admin hai.
+       `$ne` isliye ki purane products mein `kind` hai hi nahi. */
+    const filter = { kind: { $ne: "medal" } };
     if (req.query.category) filter.categories = req.query.category;
     if (req.query.published === "1") filter.isPublished = true;
     if (req.query.published === "0") filter.isPublished = false;

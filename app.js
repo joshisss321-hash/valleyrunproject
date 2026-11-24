@@ -48,6 +48,11 @@ app.use(
 /* ── WEBHOOK — MUST be before json parser ── */
 app.use("/api", webhookRoutes);
 
+/* Medal Store ka apna webhook — ye bhi parser se PEHLE, kyunki
+   signature raw bytes par banta hai. Live wale webhook se bilkul
+   alag file; usme ek line bhi nahi badli. */
+app.use("/api", require("./routes/store/medal.webhook"));
+
 /* ── BODY PARSERS ── */
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
@@ -84,12 +89,35 @@ app.use("/api/admin/tracking",       adminTracking);
 /* ⚠️ Bare "/api/admin" (adminStats, adminRoutes) se PEHLE — warna
    unka koi /:param route isse pehle match kar sakta hai. */
 app.use("/api/admin/marketing",      require("./routes/admin.marketing"));
+
+/* Medal Store admin — ye HAMESHA chalu hai, MEDAL_STORE_ENABLED se
+   bandha nahi. Wajah: admin ko switch on karne se PEHLE products
+   aur stock bharne hote hain. Andar `protect` laga hai. */
+app.use("/api/admin/medal-store",   require("./routes/store/admin.medals"));
 app.use("/api/admin",                adminStats);
 app.use("/api/admin/users",          adminUsers);
 app.use("/api/admin/leaderboard",    adminLeaderboard);
 app.use("/api/admin",                adminRoutes);
 app.use("/api/admin/reviews", adminReviews);
 app.use("/api/admin/stories", require("./routes/admin.stories"));
+
+/* ── MEDAL STORE (public) ──
+   Apna alag switch. STORE_ENABLED ko haath nahi lagta: Pahadi store
+   band rehte hue bhi medal store khul sakta hai, aur ulta bhi. */
+if (String(process.env.MEDAL_STORE_ENABLED).toLowerCase() === "true") {
+  app.use("/api/medal-store", require("./routes/store/medal.public"));
+  app.use("/api/medal-store", require("./routes/store/medal.checkout"));
+  console.log("🏅 Medal Store routes chalu");
+} else {
+  // Frontend ko saaf jawab mile, 404 ki paheli nahi
+  app.use("/api/medal-store", (_req, res) =>
+    res.status(503).json({
+      success: false,
+      code: "MEDAL_STORE_DISABLED",
+      message: "The medal store is not open yet.",
+    })
+  );
+}
 
 /* ── VALLEY STORE ──
    Ek switch ke peeche. STORE_ENABLED=false karte hi poora store bandh,
