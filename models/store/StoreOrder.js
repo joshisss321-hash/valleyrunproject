@@ -97,8 +97,23 @@ const storeOrderSchema = new mongoose.Schema(
     adminNote:    { type: String, default: "" },
     customerNote: { type: String, default: "" },
 
-    // Stock ghata diya gaya? Do baar na ghate isliye
-    stockApplied: { type: Boolean, default: false },
+    /* ── Kaunsi dukaan ka order ──
+       "store" = Valley Store, "medal" = Medal Store. Admin ke donon
+       orders page kabhi aapas mein nahi milte. Purane documents mein
+       ye field nahi hoga, isliye Pahadi taraf `{ $ne: "medal" }`. */
+    kind: { type: String, enum: ["store", "medal"], default: "store", index: true },
+
+    /* ── Stock ke do padaav ──
+       `stockReserved`: checkout par maal rok liya gaya (reserved++).
+       `stockApplied` : payment verify hua, ab sach mein stock ghata.
+
+       Dono alag isliye hain ki fail payment par sirf pehla palatna
+       hota hai, aur duplicate webhook par doosra ek hi baar chalna
+       chahiye. `stockApplied` par atomic guard lagta hai:
+       findOneAndUpdate({ stockApplied: false }, { stockApplied: true })
+       — jo jeeta wahi stock chhuega, baaki chup-chaap laut jayengi. */
+    stockReserved: { type: Boolean, default: false },
+    stockApplied:  { type: Boolean, default: false },
   },
   { timestamps: true }
 );
@@ -107,6 +122,10 @@ storeOrderSchema.index({ user: 1, createdAt: -1 });
 storeOrderSchema.index({ email: 1, createdAt: -1 });
 storeOrderSchema.index({ orderStatus: 1, createdAt: -1 });
 storeOrderSchema.index({ paymentStatus: 1, createdAt: -1 });
+
+/* Medal admin ka orders page, aur sweepExpired() ka scan */
+storeOrderSchema.index({ kind: 1, createdAt: -1 });
+storeOrderSchema.index({ paymentStatus: 1, stockReserved: 1, createdAt: 1 });
 
 storeOrderSchema.statics.PAYMENT_STATUS = PAYMENT_STATUS;
 storeOrderSchema.statics.ORDER_STATUS   = ORDER_STATUS;

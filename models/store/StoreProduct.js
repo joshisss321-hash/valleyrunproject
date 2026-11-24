@@ -46,6 +46,18 @@ const storeProductSchema = new mongoose.Schema(
     unit:     { type: String, default: "" },              // "500 g", "1 L"
     weightGm: { type: Number, default: 0 },
 
+    /* ── Checkout ne rok rakha hai, bika nahi ──
+       Jab tak payment verify nahi hota, `stock` ko haath nahi lagate —
+       sirf `reserved` badhta hai. Dikhne wala maal = stock - reserved.
+
+       Isse teen cheezein ek saath hoti hain: payment fail ho to stock
+       ko kuch hua hi nahi tha; do log aakhri medal ek saath nahi le
+       sakte; aur jo sach mein bika wahi `stock` se ghatta hai.
+
+       Khud se expire nahi hota — utils/store/medalStock.js ka
+       sweepExpired() purane pade reservations chhodta hai. */
+    reserved: { type: Number, default: 0, min: 0 },
+
     variants: { type: [variantSchema], default: [] },
 
     // Stock itna ya kam bacha to admin ko dashboard par dikhega
@@ -70,6 +82,16 @@ const storeProductSchema = new mongoose.Schema(
     countryOrigin:{ type: String, default: "India" },
 
     /* ── Dikhna / na dikhna ── */
+    /* ── Ye product kis dukaan ka hai ──
+       "store" = Valley Store (Pahadi saamaan), "medal" = Medal Store
+       (pichhle events ke bache hue medal).
+
+       Purane documents mein ye field hai hi nahi, isliye Pahadi ki
+       taraf filter hamesha `{ kind: { $ne: "medal" } }` lagta hai,
+       `{ kind: "store" }` nahi — warna saare purane products gayab
+       ho jaate. */
+    kind: { type: String, enum: ["store", "medal"], default: "store", index: true },
+
     isPublished:  { type: Boolean, default: false },      // default BAND
     isFeatured:   { type: Boolean, default: false },
     isBestSeller: { type: Boolean, default: false },
@@ -96,6 +118,7 @@ const storeProductSchema = new mongoose.Schema(
 
 /* Listing page ke liye: sirf published, category ke hisaab se, kram se */
 storeProductSchema.index({ isPublished: 1, sortOrder: 1, createdAt: -1 });
+storeProductSchema.index({ kind: 1, isPublished: 1, sortOrder: 1 });
 storeProductSchema.index({ categories: 1, isPublished: 1 });
 storeProductSchema.index({ isPublished: 1, isFeatured: 1 });
 storeProductSchema.index({ isPublished: 1, isBestSeller: 1 });
