@@ -37,6 +37,11 @@ module.exports = ({ order, settings = {} }) => {
     )
     .join("");
 
+  /* Gift ka order — khareedne wale ko yaad dilana ki parcel kisi
+     aur ke paas ja raha hai, warna wo apne darwaze par intezaar
+     karta rehta hai. */
+  const isGift = String(order.customerNote || "").startsWith("GIFT —");
+
   return `<!DOCTYPE html>
 <html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
 <body style="margin:0;padding:0;background:#f5f5f5;font-family:Arial,Helvetica,sans-serif">
@@ -75,9 +80,21 @@ module.exports = ({ order, settings = {} }) => {
         </tr>
       </table>
 
-      <div style="background:#faf9f7;border-radius:10px;padding:16px;margin-top:24px">
+      ${
+        isGift
+          ? `<div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;padding:14px 16px;margin-top:22px">
+               <strong style="color:#92400e">🎁 This is going out as a gift</strong>
+               <div style="color:#b45309;font-size:13px;margin-top:5px;line-height:1.6">
+                 We will leave the price out of the parcel and put your message on the card.
+                 It goes to the address below — not to you.
+               </div>
+             </div>`
+          : ""
+      }
+
+      <div style="background:#faf9f7;border-radius:10px;padding:16px;margin-top:${isGift ? 14 : 24}px">
         <div style="font-size:11px;font-weight:bold;letter-spacing:1px;color:#999;text-transform:uppercase">
-          Delivering to
+          ${isGift ? "Gift going to" : "Delivering to"}
         </div>
         <div style="margin-top:7px">
           <strong>${esc(order.name)}</strong><br>

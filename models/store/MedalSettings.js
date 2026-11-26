@@ -25,12 +25,17 @@ const medalSettingsSchema = new mongoose.Schema(
     supportPhone: { type: String, default: "" },
 
     /* Page ka upar ka hissa */
+    /* ⚠️ Hero ka text YAHIN se aata hai, page ke JSX se nahi.
+       Page par likha fallback kabhi nahi chalta kyunki ye default
+       hamesha maujood hota hai — isliye asli copy yahan rakhi hai,
+       aur admin ise Settings se badal sakta hai. */
     heroHeading: { type: String, default: "Own a piece of the finish line." },
     heroText: {
       type: String,
       default:
-        "Real medals from our past Valley Run challenges. A few are left over, " +
-        "and they are looking for someone to keep them.",
+        "These are the real medals from our past challenges — the same ones that went " +
+        "out to finishers. A handful are left over, and once they are gone we are not " +
+        "making them again.",
     },
     heroImage: { type: String, default: "" },
 
