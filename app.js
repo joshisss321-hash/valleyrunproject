@@ -30,6 +30,9 @@ const chatRoutes      = require("./routes/chat.routes");     // support chatbot
 
 const app = express();
 
+/* Server kab se chal raha hai — purana deploy pakadne mein kaam aata hai */
+const STARTED_AT = new Date().toISOString();
+
 /* ── CORS ── */
 app.use(
   cors({
@@ -59,6 +62,33 @@ app.use(express.urlencoded({ extended: true }));
 
 /* ── HEALTH ── */
 app.get("/", (_req, res) => res.send("Valley Run API ✅"));
+
+/* ── /api/version ──
+   Server par KAUN SA code chal raha hai, ye bina andaze ke dikhane
+   ke liye.
+
+   Zaroorat isliye padi: Medal Store deploy karne par "Route not
+   found" aata raha aur hum dono andhere mein the — GitHub par code
+   theek tha, par ye pata hi nahi chal raha tha ki Render ne wo
+   commit uthaya bhi ya nahi. Ek chhota sa endpoint us andhere ko
+   hamesha ke liye khatam kar deta hai.
+
+   RENDER_GIT_COMMIT Render khud deta hai. Koi raaz nahi khulta —
+   sirf commit ka hash aur kaun se hisse chalu hain. */
+app.get("/api/version", (_req, res) => {
+  const on = (v) => String(v).toLowerCase() === "true";
+  res.json({
+    commit: (process.env.RENDER_GIT_COMMIT || "").slice(0, 7) || "unknown",
+    branch: process.env.RENDER_GIT_BRANCH || "unknown",
+    startedAt: STARTED_AT,
+    features: {
+      medalStoreAdmin:  true,                              // hamesha mounted
+      medalStorePublic: on(process.env.MEDAL_STORE_ENABLED),
+      valleyStore:      on(process.env.STORE_ENABLED),
+      attribution:      (process.env.ATTRIBUTION_SECRET || "").length >= 16,
+    },
+  });
+});
 
 /* ── PUBLIC ── */
 app.use("/api/payment",     paymentRoutes);
