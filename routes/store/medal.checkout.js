@@ -6,7 +6,7 @@ const StoreOrder    = require("../../models/store/StoreOrder");
 const MedalSettings = require("../../models/store/MedalSettings");
 const razorpay      = require("../../config/rozarpay");
 const { generateOrderNo } = require("../../utils/store/orderNo");
-const { reserve, releaseOrder, sweepExpired, available } = require("../../utils/store/medalStock");
+const { reserveMany, release, releaseOrder, sweepExpired } = require("../../utils/store/medalStock");
 const { validSignature, markPaid, markFailed } = require("../../utils/store/medalOrder");
 
 /* ═══════════════════════════════════════════════════════════════
@@ -17,7 +17,8 @@ const { validSignature, markPaid, markFailed } = require("../../utils/store/meda
    yahan loop lagana padega, poora dhaancha nahi badalna padega.
    ═══════════════════════════════════════════════════════════════ */
 
-const MAX_QTY = 10;
+const MAX_QTY = 10;      // ek tarah ke medal ki hadd
+const MAX_LINES = 8;     // ek order mein kitni alag tarah ke medal
 
 const clean = (v, n = 120) => String(v || "").trim().slice(0, n);
 
@@ -40,9 +41,18 @@ const required = (form) => {
 
 /* ═══════════════════════════════════════════════
    POST /api/medal-store/checkout
+
+   Body: { items: [{ slug, qty }], naam/pata..., note }
+   Ek se zyada tarah ke medal ek hi order mein aa sakte hain.
 ═══════════════════════════════════════════════ */
 router.post("/checkout", async (req, res) => {
   let orderDoc = null;
+  let held = [];
+
+  const unwind = async () => {
+    for (const h of held) await release(h.productId, h.qty).catch(() => {});
+    held = [];
+  };
 
   try {
     /* Purane pade reservations pehle chhod do — ho sakta hai jo maal
@@ -50,57 +60,121 @@ router.post("/checkout", async (req, res) => {
        Cron nahi hai, isliye safai wahin jahan kaam ho raha hai. */
     await sweepExpired().catch(() => {});
 
-    const slug = clean(req.body.slug, 160);
-    const qty  = Math.floor(Number(req.body.qty) || 0);
-
     const bad = required(req.body);
     if (bad) return res.status(400).json({ success: false, message: bad });
 
-    if (qty < 1 || qty > MAX_QTY) {
-      return res.status(400).json({ success: false, message: `Please choose between 1 and ${MAX_QTY}.` });
+    /* ── Cart padho ── */
+    const raw = Array.isArray(req.body.items) ? req.body.items : [];
+    if (raw.length === 0) {
+      return res.status(400).json({ success: false, message: "Your cart is empty." });
     }
-
-    const product = await StoreProduct.findOne({ slug, kind: "medal" }).lean();
-    if (!product || !product.isPublished) {
-      return res.status(404).json({ success: false, message: "This medal is not available." });
-    }
-
-    /* Medals mein variants nahi hote. Agar kisi ne admin se laga
-       diye to `resolveLine` top-level stock ko nazarandaz kar deta
-       hai aur reservation ka hisaab galat ho jaata — isliye saaf
-       mana, chup-chaap galat order banane se behtar. */
-    if ((product.variants || []).some((v) => v.isActive !== false)) {
-      console.error(`⚠️ Medal ${product.slug} par variants laga diye gaye hain — checkout roka`);
+    if (raw.length > MAX_LINES) {
       return res.status(400).json({
         success: false,
-        message: "This medal cannot be bought right now. Please contact us.",
+        message: `You can order up to ${MAX_LINES} different medals at a time.`,
       });
+    }
+
+    /* Ek hi medal do baar bheja gaya ho to jod do — warna uska stock
+       do baar reserve hota aur ginti galat ho jaati. */
+    const wanted = new Map();
+    for (const r of raw) {
+      const slug = clean(r.slug, 160);
+      const qty  = Math.floor(Number(r.qty) || 0);
+      if (!slug || qty < 1) continue;
+      wanted.set(slug, (wanted.get(slug) || 0) + qty);
+    }
+
+    /* Hadd se zyada maanga gaya to saaf mana.
+       Chup-chaap 10 par kaat dena khatarnak tha: koi 99 maangta, paisa
+       10 ka kat jaata, parcel mein 10 aate — aur usne 99 maange the. */
+    for (const [, qty] of wanted) {
+      if (qty > MAX_QTY) {
+        return res.status(400).json({
+          success: false,
+          message: `You can order up to ${MAX_QTY} of the same medal in one order.`,
+        });
+      }
+    }
+    if (wanted.size === 0) {
+      return res.status(400).json({ success: false, message: "Your cart is empty." });
     }
 
     /* ── Daam SERVER se, client se nahi ── */
-    const unitPrice = Number(product.price) || 0;
-    if (unitPrice < 1) {
-      return res.status(400).json({ success: false, message: "This medal has no price set yet." });
-    }
+    const lines = [];
+    let subtotal = 0;
+    let totalQty = 0;
 
-    const settings = await MedalSettings.get();
-    const subtotal = unitPrice * qty;
-    const shipping = MedalSettings.shippingFor(settings, subtotal);
-    const total    = subtotal + shipping;
+    for (const [slug, qty] of wanted) {
+      const product = await StoreProduct.findOne({ slug, kind: "medal" }).lean();
 
-    /* ── Maal rok lo — stock ko abhi haath nahi ── */
-    const held = await reserve(product._id, qty);
-    if (!held.ok) {
-      return res.status(409).json({
-        success: false,
-        code: "OUT_OF_STOCK",
-        message: held.reason,
-        left: held.left ?? 0,
+      if (!product || !product.isPublished) {
+        return res.status(404).json({
+          success: false,
+          code: "GONE",
+          slug,
+          message: `This medal is no longer available. Please remove it from your cart.`,
+        });
+      }
+
+      /* Medals mein variants nahi hote. Agar kisi ne admin se laga
+         diye to resolveLine top-level stock ko nazarandaz kar deta
+         hai aur reservation ka hisaab galat ho jaata — isliye saaf
+         mana, chup-chaap galat order banane se behtar. */
+      if ((product.variants || []).some((v) => v.isActive !== false)) {
+        console.error("⚠️ Medal " + product.slug + " par variants laga diye gaye hain — checkout roka");
+        return res.status(400).json({
+          success: false,
+          message: "This medal cannot be bought right now. Please contact us.",
+        });
+      }
+
+      const unitPrice = Number(product.price) || 0;
+      if (unitPrice < 1) {
+        return res.status(400).json({ success: false, message: product.name + " has no price set yet." });
+      }
+
+      subtotal += unitPrice * qty;
+      totalQty += qty;
+
+      lines.push({
+        product: product._id,
+        name:    product.name,
+        image:   product.featuredImage || (product.images && product.images[0] ? product.images[0].url : ""),
+        qty,
+        unitPrice,
+        lineTotal: unitPrice * qty,
+        weightGm: product.weightGm || 0,
       });
     }
 
+    const settings = await MedalSettings.get();
+    const discount = MedalSettings.bulkOff(settings, totalQty, subtotal);
+    const shipping = MedalSettings.shippingFor(settings, subtotal - discount);
+    const total    = subtotal - discount + shipping;
+
+    if (total < 1) {
+      return res.status(400).json({ success: false, message: "That order total is not valid. Please contact us." });
+    }
+
+    /* ── Saara maal rok lo — stock ko abhi haath nahi ──
+       Beech mein ek bhi fail hua to pehle wale bhi chhod diye jaate
+       hain (reserveMany ke andar). */
+    const grab = await reserveMany(lines.map((l) => ({ productId: l.product, qty: l.qty })));
+    if (!grab.ok) {
+      const which = lines.find((l) => String(l.product) === String(grab.failed.productId));
+      return res.status(409).json({
+        success: false,
+        code: "OUT_OF_STOCK",
+        name: which ? which.name : "",
+        message: which ? which.name + " — " + grab.reason : grab.reason,
+        left: grab.left,
+      });
+    }
+    held = grab.held;
+
     /* ── Order bana do (abhi pending) ── */
-    const phone10 = String(req.body.phone).replace(/\D/g, "").slice(-10);
+    const phone10 = String(req.body.phone).replace(/[^0-9]/g, "").slice(-10);
 
     orderDoc = await StoreOrder.create({
       orderNo: await generateOrderNo(),
@@ -118,16 +192,9 @@ router.post("/checkout", async (req, res) => {
         state: clean(req.body.state),
         pincode: clean(req.body.pincode, 6),
       },
-      items: [{
-        product: product._id,
-        name:    product.name,
-        image:   product.featuredImage || product.images?.[0]?.url || "",
-        qty,
-        unitPrice,
-        lineTotal: subtotal,
-        weightGm: product.weightGm || 0,
-      }],
+      items: lines,
       subtotal,
+      discount,
       shipping,
       total,
       paymentMethod: "razorpay",
@@ -137,10 +204,10 @@ router.post("/checkout", async (req, res) => {
     });
 
     /* ── Razorpay order ──
-       ⚠️ notes mein `eventSlug` JAAN-BUJH KAR nahi hai. Live
-       registration ka webhook `notes.eventSlug` na mile to turant
-       ruk jaata hai — isi wajah se wo file chhune ki zaroorat nahi
-       padi. Ye naam yahan kabhi mat daalna. */
+       ⚠️ notes mein eventSlug JAAN-BUJH KAR nahi hai. Live
+       registration ka webhook notes.eventSlug na mile to turant ruk
+       jaata hai — isi wajah se wo file chhune ki zaroorat nahi padi.
+       Ye naam yahan kabhi mat daalna. */
     const rzp = await razorpay.orders.create({
       amount:   Math.round(total * 100),
       currency: "INR",
@@ -161,19 +228,21 @@ router.post("/checkout", async (req, res) => {
       success: true,
       orderNo: orderDoc.orderNo,
       order: { id: rzp.id, amount: rzp.amount, currency: rzp.currency },
-      amounts: { unitPrice, qty, subtotal, shipping, total },
+      amounts: { subtotal, discount, shipping, total, totalQty },
     });
   } catch (err) {
     console.error("medal checkout:", err);
 
     /* Razorpay ya database beech mein fail hua — rok hata do, warna
        wo maal bina bike 20 minute tak atka rehta. */
-    if (orderDoc?._id) {
+    if (orderDoc && orderDoc._id) {
       await releaseOrder(orderDoc._id, "cancel").catch(() => {});
       await StoreOrder.updateOne(
         { _id: orderDoc._id },
         { $set: { paymentStatus: "failed", orderStatus: "cancelled", cancelledAt: new Date() } }
       ).catch(() => {});
+    } else {
+      await unwind();
     }
 
     res.status(500).json({ success: false, message: "Could not start the payment. Please try again." });

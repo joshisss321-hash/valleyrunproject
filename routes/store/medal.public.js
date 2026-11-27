@@ -120,6 +120,7 @@ router.get("/settings", async (_req, res) => {
         heroImage:   s.heroImage,
         shippingFlat: s.shippingFlat,
         freeOver:     s.freeOver,
+        perExtraOff:  s.perExtraOff,
         supportEmail: s.supportEmail,
         supportPhone: s.supportPhone,
         dispatchNote: s.dispatchNote,

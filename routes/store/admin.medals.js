@@ -404,7 +404,7 @@ router.patch("/orders/:id/status", async (req, res) => {
    SETTINGS
 ═══════════════════════════════════════════════ */
 const SETTING_FIELDS = [
-  "storeName", "tagline", "shippingFlat", "freeOver",
+  "storeName", "tagline", "shippingFlat", "freeOver", "perExtraOff",
   "supportEmail", "supportPhone",
   "heroHeading", "heroText", "heroImage",
   "dispatchNote", "shippingPolicy", "returnPolicy", "notifyEmails",
@@ -425,6 +425,7 @@ router.put("/settings", async (req, res) => {
 
     s.shippingFlat = Math.max(0, Number(s.shippingFlat) || 0);
     s.freeOver     = Math.max(0, Number(s.freeOver) || 0);
+    s.perExtraOff  = Math.max(0, Math.floor(Number(s.perExtraOff) || 0));
     s.notifyEmails = [...new Set((s.notifyEmails || [])
       .map((e) => String(e).trim().toLowerCase()).filter(Boolean))];
 

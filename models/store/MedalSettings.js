@@ -21,6 +21,16 @@ const medalSettingsSchema = new mongoose.Schema(
     shippingFlat: { type: Number, default: 0, min: 0 },
     freeOver:     { type: Number, default: 0, min: 0 },
 
+    /* ── Zyada medal, kam daam ──
+       Pehle medal par kuch nahi; uske baad har medal par itne rupee
+       chhoot. 3 medal = 2 × perExtraOff ki chhoot.
+
+       Alag-alag event ke medal bhi ek hi ginti mein aate hain —
+       cart bada karne ka yahi matlab hai.
+
+       0 kar do to chhoot band. */
+    perExtraOff: { type: Number, default: 20, min: 0 },
+
     supportEmail: { type: String, default: "" },
     supportPhone: { type: String, default: "" },
 
@@ -58,6 +68,26 @@ medalSettingsSchema.statics.get = async function () {
   let doc = await this.findOne({ key: "medal" });
   if (!doc) doc = await this.create({ key: "medal" });
   return doc;
+};
+
+/** Kitni chhoot milegi.
+ *
+ *  ⚠️ Ye hisaab SIRF yahan hai. Page, cart aur checkout teeno isi
+ *  ko bulate hain, warna teeno alag daam dikhane lagte — aur jo
+ *  daam page par dikha tha usse zyada charge hona sabse buri baat
+ *  hoti hai.
+ *
+ *  Koi percentage ki hadd nahi (ye jaan-bujh kar). Par total kabhi
+ *  0 ya minus nahi ho sakta — Razorpay us par charge hi nahi kar
+ *  sakta — isliye chhoot subtotal se ek rupaya kam par ruk jaati
+ *  hai. Coupon wale code mein bhi yahi rok pehle se hai. */
+medalSettingsSchema.statics.bulkOff = function (settings, totalQty, subtotal) {
+  const per = Number(settings?.perExtraOff) || 0;
+  const n = Math.floor(Number(totalQty) || 0);
+  if (per <= 0 || n <= 1) return 0;
+
+  const raw = per * (n - 1);
+  return Math.max(0, Math.min(raw, Math.max(0, subtotal - 1)));
 };
 
 /** Shipping ka hisaab — ek hi jagah, taaki checkout aur page kabhi

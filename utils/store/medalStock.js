@@ -261,8 +261,39 @@ const sweepExpired = async (minutes = HOLD_MINUTES) => {
   return n;
 };
 
+/* ───────────────────────────────────────────────────────────────
+   RESERVE MANY — cart ke liye
+
+   ⚠️ Yahan "sab ya kuch nahi" chahiye. Agar cart mein teen medal
+   hain aur teesra khatam ho chuka hai, to pehle do ki rok bhi
+   hatani padegi — warna wo do medal 20 minute tak bina wajah atke
+   rahenge jabki order bana hi nahi.
+
+   Mongo mein kai document par ek saath transaction standalone
+   server par nahi chalta, isliye haath se palatte hain: jo rok
+   lagayi thi, wahi wapas kholte hain.
+─────────────────────────────────────────────────────────────── */
+const reserveMany = async (lines) => {
+  const held = [];
+
+  for (const line of lines) {
+    const r = await reserve(line.productId, line.qty);
+
+    if (!r.ok) {
+      // Jo abhi tak roka tha, sab chhod do
+      for (const h of held) await release(h.productId, h.qty).catch(() => {});
+      return { ok: false, failed: line, reason: r.reason, left: r.left ?? 0 };
+    }
+
+    held.push({ productId: line.productId, qty: line.qty, product: r.product });
+  }
+
+  return { ok: true, held };
+};
+
 module.exports = {
   HOLD_MINUTES,
+  reserveMany,
   available,
   reserve,
   release,
